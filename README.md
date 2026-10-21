@@ -1,6 +1,6 @@
 # Default Ambience
 
-A Euclidean sequencer for ambient music, made for phones and brrowsers.
+A Euclidean sequencer for ambient music, made for phones and browsers.
 
 Four **orbits** each loop a rhythm: a number of hits spread as evenly as possible around a number of steps. Every hit picks a note from the scale you choose, so the melodies are random but always in key. Orbits of different lengths drift in and out of line with each other, so the music keeps changing.
 
