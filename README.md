@@ -1,6 +1,6 @@
 # Default Ambience
 
-A Euclidean sequencer for ambient music, made for phones.
+A Euclidean sequencer for ambient music, made for phones and brrowsers.
 
 Four **orbits** each loop a rhythm: a number of hits spread as evenly as possible around a number of
 steps. Every hit picks a note from the scale you choose (the Japanese Yo scale by default), so the
@@ -16,7 +16,8 @@ other, so the music keeps changing.
 
 ## Use it
 
-Open the web app, tap play, and touch an orbit to change its settings. The **i** buttons explain each page.
+Open the web app, tap play, and touch an orbit to change its settings. The **i** buttons explain each page. 
+Share your creations as a string of text that others can paste into their copy of the app.
 
 ## How it's built
 
