@@ -19,6 +19,14 @@ Open the web app, tap play, and touch an orbit to change its settings. The **i**
 
 It's a single web page (`index.html`) plus the sound engine (`macro.wasm`, run by `macro-worklet.js` in the browser's audio thread). There is no build step for the page. To rebuild the sound engine from source, see `engine/build.sh`.
 
+## Licence
+
+Default Ambience is free software, released under the
+[GNU General Public License, version 3](LICENSE). You're welcome to study it, change it and share it;
+versions you distribute must stay under the same licence, with their source code available.
+
+If you release your own version, please give it a different name, so people don't confuse it with this one.
+
 ## Credits
 
 The sound engine is compiled from open-source code by Emilie Gillet, used under the MIT License.
