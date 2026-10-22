@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Default Ambience</title>
 <meta name="description" content="A Euclidean sequencer for ambient music, with four orbits, scales and a synth engine built from open-source Eurorack code.">
-<meta name="theme-color" content="#13141d">
+<meta name="theme-color" content="#f3f2ee">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -50,7 +50,7 @@ body{font-family:var(--body);font-size:15px;line-height:1.45;
 .label{font-family:var(--mono);font-size:.74rem;letter-spacing:.02em;text-transform:lowercase;color:var(--muted)}
 button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 
-#play{width:100%;height:100%;min-height:64px;border-radius:12px;border:none;background:var(--fg);color:var(--bg);
+#play{width:100%;height:100%;min-height:52px;border-radius:12px;border:none;background:var(--fg);color:var(--bg);
   cursor:pointer;display:grid;place-items:center;transition:transform .1s}
 #play:active{transform:scale(.95)}
 #play[aria-busy="true"]{opacity:.5}
@@ -77,10 +77,11 @@ select{font:inherit;font-size:.9rem;background:var(--raise);color:var(--fg);bord
 .btn.armed{border-color:var(--acc);color:var(--acc)}
 
 /* rings */
-.rings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0 -8px}
+.rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 -6px}
 .ring{--acc:var(--t1);font:inherit;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:16px;
-  padding:6px 2px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;transition:background .15s,border-color .15s}
-.ring canvas{width:100%;max-width:300px;aspect-ratio:1;height:auto}
+  padding:4px 1px 3px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0;border-radius:12px;min-width:0;transition:background .15s,border-color .15s}
+.ring canvas{width:100%;max-width:200px;aspect-ratio:1;height:auto}
+.ring .note{font-size:.7rem}
 .ring[aria-selected="true"]{background:var(--panel);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .ring.muted canvas{opacity:.4}
 .tname{font-family:var(--body);font-size:.88rem;color:var(--acc);font-weight:600}
@@ -135,7 +136,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .credits a{color:var(--fg)}
 .credits strong{color:var(--fg);font-weight:600}
 .credits summary{cursor:pointer;font-family:var(--mono);font-size:.7rem;letter-spacing:.02em;text-transform:lowercase}
-.mainbar{display:flex;justify-content:flex-end;margin-bottom:-10px}
+.transport{display:flex;flex-direction:column;gap:6px;align-items:center}
+.transport #play{flex:1;min-height:52px}
 #maininfobox{display:flex;flex-direction:column;gap:8px}
 #maininfobox[hidden]{display:none}
 #maininfobox p{margin:0}
@@ -149,12 +151,14 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 </head>
 <body>
 <div class="wrap">
-  <div class="mainbar"><button class="info" id="maininfo" aria-label="How Default Ambience works" aria-expanded="false">i</button></div>
-  <p class="infobox" id="maininfobox" hidden></p>
   <section class="rings" id="rings" role="tablist" aria-label="Orbits"></section>
   <section class="dials" id="dials" aria-label="Transport and global settings">
-    <button id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playicon" d="M7 4l13 8-13 8z"/></svg></button>
+    <div class="transport">
+      <button id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playicon" d="M7 4l13 8-13 8z"/></svg></button>
+      <button class="info" id="maininfo" aria-label="How Default Ambience works" aria-expanded="false">i</button>
+    </div>
   </section>
+  <p class="infobox" id="maininfobox" hidden></p>
   <p class="note" id="macrostatus" role="status"></p>
   <section class="panel" id="panel" role="tabpanel"></section>
 
@@ -582,7 +586,7 @@ function updateDials(){
 const SESS_KEY="default-ambience-sessions";
 // carry over sessions and theme saved under the app's old name
 // carry over sessions and theme saved under the app's earlier names
-try{ for(const k of ["sessions","theme"]) for(const oldName of ["orbit-spaces-","euclid-strings-","euclid-drift-"]){
+try{ for(const k of ["sessions"]) for(const oldName of ["orbit-spaces-","euclid-strings-","euclid-drift-"]){
   const old=localStorage.getItem(oldName+k);
   if(old!==null && localStorage.getItem("default-ambience-"+k)===null) localStorage.setItem("default-ambience-"+k,old); } }catch(e){}
 let sessCache=[];
@@ -645,7 +649,7 @@ const INFO={
   "Session":"Presets are built in and always available; loading one replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
 };
 const MAIN_INFO=[
-  "Each orbit is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the white dot shows where it is now. The number in the middle is hits/steps, and the note below is the last one played.",
+  "Each orbit is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last one played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (notes and rhythm), Sound (voice and filter), Motion (envelope and modulation) and Mix.",
   "Below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and theme. Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, and session codes you can share.",
@@ -764,12 +768,17 @@ function panelHead(title,sub,acc){
   head.innerHTML=`<span class="tname">${title}</span>${sub?`<span class="note">${sub}</span>`:""}`;
   panel.append(head); return head;
 }
-const PREF={theme:"dark"};
-try{ const th=localStorage.getItem("default-ambience-theme"); if(th) PREF.theme=th; }catch(e){}
+const PREF={theme:"light"};
+// Light is the default. Only a theme the viewer picks themselves is remembered.
+try{ const th=localStorage.getItem("default-ambience-theme-choice"); if(th) PREF.theme=th; }catch(e){}
 function applyTheme(){
   document.documentElement.dataset.app=PREF.theme;
+  const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.content=PREF.theme==="light"?"#f3f2ee":"#13141d";
   refreshColours();
-  try{ localStorage.setItem("default-ambience-theme",PREF.theme); }catch(e){}
+}
+function chooseTheme(){
+  try{ localStorage.setItem("default-ambience-theme-choice",PREF.theme); }catch(e){}
+  applyTheme();
 }
 applyTheme();
 function tempoControl(){
@@ -794,7 +803,7 @@ function renderGlobal(){
     full(tempoControl()),
     choice(G,"root","Root",NOTES.map((n,i)=>[i,n]),updateDials),
     scaleChoice(),
-    full(seg(PREF,"theme","Theme",[["dark","Dark"],["light","Light"]],applyTheme))));
+    full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme))));
 }
 function renderMaster(){
   panelHead("Master","","--fx");
@@ -932,7 +941,7 @@ function draw(){
     const pulseOn=now-t.flash<420;
     const sig=[t.pos,t.hits,t.steps,t.rot,t.lock,sel===ti,cssGen,pulseOn?Math.round((now-t.flash)/30):-1].join();
     if(sig===t.sig) return; t.sig=sig;
-    const c=t.canvas.getContext("2d"), R=130, cx=160, cy=160, col=css(t.color);
+    const c=t.canvas.getContext("2d"), R=134, cx=160, cy=160, col=css(t.color);
     c.clearRect(0,0,320,320);
     const pat=euclid(t.hits,t.steps,t.rot), ang=i=>-Math.PI/2+i/t.steps*Math.PI*2;
     const hitIdx=pat.map((h,i)=>h?i:-1).filter(i=>i>=0);
@@ -941,21 +950,21 @@ function draw(){
       const P=i=>[cx+Math.cos(ang(i))*R, cy+Math.sin(ang(i))*R];
       c.beginPath(); hitIdx.forEach((i,j)=>{const [x,y]=P(i); j?c.lineTo(x,y):c.moveTo(x,y);});
       c.closePath(); c.globalAlpha=0.12; c.fillStyle=col; c.fill();
-      c.globalAlpha=0.5; c.strokeStyle=col; c.lineWidth=2; c.stroke(); c.globalAlpha=1;
+      c.globalAlpha=0.6; c.strokeStyle=col; c.lineWidth=5; c.stroke(); c.globalAlpha=1;
     }
-    c.beginPath(); c.arc(cx,cy,R,0,Math.PI*2); c.strokeStyle=line; c.lineWidth=2; c.stroke();
-    const dotR=Math.max(5,Math.min(13,R*Math.PI/t.steps*0.55)), ringBg=sel===ti?css("--panel"):bg;
+    c.beginPath(); c.arc(cx,cy,R,0,Math.PI*2); c.strokeStyle=line; c.lineWidth=5; c.stroke();
+    const dotR=Math.max(8,Math.min(20,R*Math.PI/t.steps*0.6)), ringBg=sel===ti?css("--panel"):bg;
     pat.forEach((h,i)=>{
       const x=cx+Math.cos(ang(i))*R, y=cy+Math.sin(ang(i))*R, cur=i===t.pos;
       c.beginPath(); c.arc(x,y,(h?dotR:dotR*0.55)*(cur?1.35:1),0,Math.PI*2);
       if(h){c.fillStyle=cur?fg:col; c.fill();}
-      else {c.fillStyle=ringBg; c.fill(); c.strokeStyle=cur?fg:muted; c.lineWidth=2; c.stroke();}
+      else {c.fillStyle=ringBg; c.fill(); c.strokeStyle=cur?fg:muted; c.lineWidth=4; c.stroke();}
     });
     const pulse=Math.max(0,1-(performance.now()-t.flash)/400);
-    c.beginPath(); c.arc(cx,cy,58+pulse*10,0,Math.PI*2); c.fillStyle=col; c.globalAlpha=0.1+pulse*0.35; c.fill(); c.globalAlpha=1;
+    c.beginPath(); c.arc(cx,cy,72+pulse*12,0,Math.PI*2); c.fillStyle=col; c.globalAlpha=0.1+pulse*0.35; c.fill(); c.globalAlpha=1;
     c.fillStyle=fg; c.textAlign="center"; c.textBaseline="middle";
-    c.fillStyle=fg; c.font="600 34px 'IBM Plex Mono', monospace"; c.fillText(t.hits+"/"+t.steps,cx,t.lock?cy-10:cy);
-    if(t.lock){ c.fillStyle=muted; c.font="500 20px 'IBM Plex Mono', monospace"; c.fillText("lock",cx,cy+24); }
+    c.fillStyle=fg; c.font="600 56px 'IBM Plex Mono', monospace"; c.fillText(t.hits+"/"+t.steps,cx,t.lock?cy-14:cy);
+    if(t.lock){ c.fillStyle=muted; c.font="500 34px 'IBM Plex Mono', monospace"; c.fillText("lock",cx,cy+36); }
   });
   requestAnimationFrame(draw);
 }
