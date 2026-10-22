@@ -26,6 +26,8 @@ img{max-width:100%}
   --fg:#ebe6da; --muted:#9093a8;
   --t1:#eaa53c; --t2:#5fc4b6; --t3:#e07a9b; --t4:#7aa7f2;
   --gl:#b9d064; --fx:#b39cf0; --ss:#c3c6d6;
+  /* control scale: one text size and two heights for every button, tab and menu */
+  --fs-ui:.84rem; --h-ctl:32px; --h-main:38px;
   --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   color-scheme:dark;
@@ -49,7 +51,7 @@ body{font-family:var(--body);font-size:15px;line-height:1.45;
 .label{font-family:var(--mono);font-size:.74rem;letter-spacing:.02em;color:var(--muted)}
 button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 
-#play{width:100%;height:44px;border-radius:12px;border:none;background:var(--fg);color:var(--bg);
+#play{width:100%;height:var(--h-main);border-radius:12px;border:none;background:var(--fg);color:var(--bg);
   cursor:pointer;display:grid;place-items:center;transition:transform .1s}
 #play:active{transform:scale(.95)}
 #play[aria-busy="true"]{opacity:.5}
@@ -65,15 +67,18 @@ button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid va
 .sl .knob{position:absolute;top:6px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:var(--fg);
   box-shadow:0 0 0 3px var(--panel)}
 .sl.dragging .knob{transform:scale(1.2);background:var(--acc,var(--t1))}
-select{font:inherit;font-size:.9rem;background:var(--raise);color:var(--fg);border:1px solid var(--line);
+select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--fg);border:1px solid var(--line);
   border-radius:8px;padding:6px 8px;width:100%}
 /* one tile style for every button: segmented choices, toggles and actions */
 .seg,.tiles{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px}
-.seg button,.btn{font:inherit;font-size:.82rem;font-weight:500;background:var(--raise);color:var(--fg);border:1px solid var(--line);
-  border-radius:8px;padding:8px 12px;min-height:38px;cursor:pointer;text-transform:inherit}
+.seg button,.btn{font:inherit;font-size:var(--fs-ui);font-weight:500;background:var(--raise);color:var(--fg);border:1px solid var(--line);
+  border-radius:8px;padding:4px 10px;min-height:var(--h-ctl);cursor:pointer;text-transform:inherit}
 .seg button[aria-pressed="true"],.btn[aria-pressed="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 .btn:active,.seg button:active{filter:brightness(1.15)}
 .btn.armed{border-color:var(--acc);color:var(--acc)}
+.sessrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:var(--raise);border:1px solid var(--line);border-radius:10px}
+.sessrow .sname{font-weight:600;font-size:.9rem}
+.sessrow input,#sessname{font:inherit;font-size:var(--fs-ui);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;min-width:0}
 .btn.primary{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 
 /* rings */
@@ -88,12 +93,12 @@ select{font:inherit;font-size:.9rem;background:var(--raise);color:var(--fg);bord
 .dials{display:grid;grid-template-columns:56px repeat(3,minmax(0,1fr)) 30px;gap:6px;align-items:center}
 .dials #maininfo{justify-self:end}
 .dial{--acc:var(--fx);font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:12px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;height:44px;padding:0 6px;min-width:0;text-align:center;transition:border-color .15s,background .15s}
-.dial .tname{font-size:.85rem}
+  display:flex;align-items:center;justify-content:center;height:var(--h-main);padding:0 6px;min-width:0;text-align:center;transition:border-color .15s,background .15s}
+.dial .tname{font-size:var(--fs-ui)}
 .dial .face{font-family:var(--mono);font-size:.72rem;line-height:1.3;color:var(--muted)}
 .dial .face b{display:block;font-size:1rem;font-weight:500;color:var(--fg);white-space:nowrap}
 .dial[aria-selected="true"]{border-color:var(--acc);background:var(--panel);box-shadow:inset 0 0 0 1px var(--acc)}
-textarea{font:inherit;font-size:.95rem;line-height:1.5;width:100%;min-height:220px;resize:vertical;background:var(--raise);color:var(--fg);
+textarea{font:inherit;font-size:var(--fs-ui);line-height:1.5;width:100%;min-height:220px;resize:vertical;background:var(--raise);color:var(--fg);
   border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-sizing:border-box}
 textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .note{font-family:var(--mono);font-size:.75rem;color:var(--muted)}
@@ -108,7 +113,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead{display:flex;align-items:center;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1}
-.vhead .btn{flex:none;min-width:84px;min-height:46px;font-size:.88rem}
+.vhead .btn{flex:none;min-width:64px}
 .pages{display:flex;flex-wrap:wrap;gap:2px 0;margin:0 -4px;padding:0;flex:1;min-width:0}
 .navrow{display:flex;align-items:center;gap:8px}
 .phead .info{margin-left:auto}
@@ -116,14 +121,14 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
   font-family:var(--mono);font-size:.8rem;font-weight:500;cursor:pointer;display:grid;place-items:center;padding:0}
 .info[aria-expanded="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc)}
 #maininfo{--acc:var(--fg)}
-.infobox{margin:0;padding:10px 12px;border-radius:10px;background:var(--raise);color:var(--fg);font-size:.85rem;line-height:1.5}
+.infobox{margin:0;padding:10px 12px;border-radius:10px;background:var(--raise);color:var(--fg);font-size:var(--fs-ui);line-height:1.5}
 .pages::-webkit-scrollbar{display:none}
-.pages button{font:inherit;font-size:.82rem;font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;
-  padding:6px 5px;font-size:.8rem;cursor:pointer;white-space:nowrap}
+.pages button{font:inherit;font-size:var(--fs-ui);font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;
+  padding:6px 6px;cursor:pointer;white-space:nowrap}
 .pages button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--acc)}
 .page{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;min-width:0}
 .page .full{grid-column:1 / -1}
-.hint{color:var(--muted);font-size:.85rem;margin:0;max-width:60ch}
+.hint{color:var(--muted);font-size:var(--fs-ui);margin:0;max-width:60ch}
 .adsr{width:100%;height:70px;display:block}
 .blendbar[hidden]{display:none}
 .blendbar{--acc:var(--ss);display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:2px solid var(--acc);border-radius:12px;background:var(--panel)}
@@ -133,12 +138,12 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 #bslider{flex:1;min-width:0;padding:0 10px}
 #bslider .top{display:none}
 #btime{min-width:4.2em;text-align:right;font-variant-numeric:tabular-nums}
-.bbtn{min-height:34px;min-width:38px;padding:4px 8px;flex:none}
+.bbtn{min-width:34px;padding:2px 8px;flex:none}
 .tempo{display:flex;align-items:flex-end;gap:10px}
 .tempo .ctl{flex:1}
-.nudge{flex:none;width:46px;min-height:42px;padding:0;font-size:1.2rem;touch-action:manipulation}
+.nudge{flex:none;width:38px;padding:0;font-size:1rem;touch-action:manipulation}
 .modslot{padding:4px 0 8px}
-.secthead{font-size:.82rem;font-weight:600;color:var(--acc);padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}
+.secthead{font-size:var(--fs-ui);font-weight:600;color:var(--acc);padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}
 .page>.secthead:first-child{border-top:none;padding-top:0;margin-top:0}
 .dim{opacity:.45}
 
@@ -741,7 +746,7 @@ const INFO={
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
   "Global":"Tempo applies to all four orbits. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. Theme switches between dark and light.",
   "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
-  "Session":"Presets are built in and always available; loading one replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
+  "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
 };
 const MAIN_INFO=[
   "Each orbit is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last one played.",
@@ -953,9 +958,8 @@ function sessionsBody(){
   const pre=document.createElement("div"); pre.className="ctl full"; pre.style.cssText="gap:8px";
   const preStatus=document.createElement("p"); preStatus.className="note"; preStatus.setAttribute("role","status"); preStatus.style.margin="0";
   PRESETS.forEach(pr=>{
-    const row=document.createElement("div");
-    row.style.cssText="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--raise);border:1px solid var(--line);border-radius:10px";
-    row.innerHTML=`<div style="flex:1;min-width:0"><div style="font-weight:600">${pr.name}</div><div class="note">${pr.about}</div></div>`;
+    const row=document.createElement("div"); row.className="sessrow"; row.style.flexWrap="nowrap";
+    row.innerHTML=`<div style="flex:1;min-width:0"><div class="sname">${pr.name}</div><div class="note">${pr.about}</div></div>`;
     const b=mkBtn("Load"); b.onclick=()=>{ restore(clone(pr.data)); preStatus.textContent=`Loaded “${pr.name}”`; };
     row.append(b); pre.append(row);
   });
@@ -965,7 +969,7 @@ function sessionsBody(){
   const list=loadSessions();
   wrap.append(sectHead("Your sessions"));
   save.innerHTML=`<label class="label" for="sessname">Save the current setup as</label>
-    <div style="display:flex;gap:8px"><input id="sessname" type="text" maxlength="40" style="flex:1;min-width:0;font:inherit;background:var(--raise);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px"></div>`;
+    <div style="display:flex;gap:8px"><input id="sessname" type="text" maxlength="40" style="flex:1"></div>`;
   const nameIn=save.querySelector("input"); nameIn.value="Session "+(list.length+1);
   const saveBtn=mkBtn("Save"); save.querySelector("div").append(saveBtn);
   const status=document.createElement("p"); status.className="note full"; status.setAttribute("role","status");
@@ -980,15 +984,24 @@ function sessionsBody(){
   const box=document.createElement("div"); box.className="full"; box.style.cssText="display:flex;flex-direction:column;gap:8px";
   if(!list.length){ box.append(hint("No saved sessions yet. Saved sessions keep everything, including locked phrases.")); }
   list.forEach((it,i)=>{
-    const row=document.createElement("div");
-    row.style.cssText="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:var(--raise);border:1px solid var(--line);border-radius:10px";
+    const row=document.createElement("div"); row.className="sessrow";
     const when=new Date(it.saved);
-    row.innerHTML=`<div style="flex:1;min-width:120px"><div style="font-weight:600">${it.name.replace(/[<&>]/g,"")}</div><div class="note">${when.toLocaleDateString([], {day:"numeric",month:"short"})} ${when.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · ${it.data.G.bpm} bpm · ${NOTES[it.data.G.root]} ${it.data.G.scale}</div></div>`;
-    const load=mkBtn("Load"), over=mkBtn("Update"), del=mkBtn("Delete");
+    row.innerHTML=`<div style="flex:1;min-width:120px"><div class="sname"></div><div class="note">${when.toLocaleDateString([], {day:"numeric",month:"short"})} ${when.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · ${it.data.G.bpm} bpm · ${NOTES[it.data.G.root]} ${it.data.G.scale}</div></div>`;
+    row.querySelector(".sname").textContent=it.name;
+    const load=mkBtn("Load"), ren=mkBtn("Rename"), over=mkBtn("Update"), del=mkBtn("Delete");
+    ren.onclick=()=>{   // swap the name for a text box; Enter or Done saves, Escape cancels
+      const nm=row.querySelector(".sname"), inp=document.createElement("input");
+      inp.type="text"; inp.maxLength=40; inp.value=it.name; inp.setAttribute("aria-label","New name for "+it.name); inp.style.width="100%";
+      nm.replaceWith(inp); inp.focus(); inp.select();
+      ren.textContent="Done";
+      const commit=()=>{ const v=inp.value.trim(); if(v&&v!==it.name){ const l=loadSessions().slice(); l[i]={...l[i],name:v}; storeSessions(l); status.textContent=`Renamed to “${v}”`; } renderSessions(); };
+      ren.onclick=commit;
+      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault(); commit();} if(e.key==="Escape") renderSessions(); });
+    };
     load.onclick=()=>{ try{restore(it.data); status.textContent=`Loaded “${it.name}”`;}catch(e){status.textContent="That session couldn't be loaded.";} };
     twoTap(over,"Update",()=>{const l=loadSessions().slice(); l[i]={...l[i],saved:new Date().toISOString(),data:snapshot()}; storeSessions(l); renderSessions();});
     twoTap(del,"Delete",()=>{const l=loadSessions().slice(); l.splice(i,1); storeSessions(l); renderSessions(); updateDials();});
-    const b=document.createElement("div"); b.className="btns"; b.append(load,over,del); row.append(b);
+    const b=document.createElement("div"); b.className="btns"; b.append(load,ren,over,del); row.append(b);
     box.append(row);
   });
   wrap.append(box);
