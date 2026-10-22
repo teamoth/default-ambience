@@ -50,7 +50,7 @@ body{font-family:var(--body);font-size:15px;line-height:1.45;
 .label{font-family:var(--mono);font-size:.74rem;letter-spacing:.02em;text-transform:lowercase;color:var(--muted)}
 button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 
-#play{width:100%;height:100%;min-height:52px;border-radius:12px;border:none;background:var(--fg);color:var(--bg);
+#play{width:100%;height:44px;border-radius:12px;border:none;background:var(--fg);color:var(--bg);
   cursor:pointer;display:grid;place-items:center;transition:transform .1s}
 #play:active{transform:scale(.95)}
 #play[aria-busy="true"]{opacity:.5}
@@ -85,10 +85,11 @@ select{font:inherit;font-size:.9rem;background:var(--raise);color:var(--fg);bord
 .ring[aria-selected="true"]{background:var(--panel);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
 .ring.muted canvas{opacity:.4}
 .tname{font-family:var(--body);font-size:.88rem;color:var(--acc);font-weight:600}
-.dials{display:grid;grid-template-columns:64px repeat(3,minmax(0,1fr));gap:8px}
+.dials{display:grid;grid-template-columns:56px repeat(3,minmax(0,1fr)) 30px;gap:6px;align-items:center}
+.dials #maininfo{justify-self:end}
 .dial{--acc:var(--fx);font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:12px;cursor:pointer;
-  display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 10px;min-width:0;text-align:left;transition:border-color .15s,background .15s}
-.dial .tname{font-size:.72rem}
+  display:flex;align-items:center;justify-content:center;height:44px;padding:0 6px;min-width:0;text-align:center;transition:border-color .15s,background .15s}
+.dial .tname{font-size:.85rem}
 .dial .face{font-family:var(--mono);font-size:.72rem;line-height:1.3;color:var(--muted)}
 .dial .face b{display:block;font-size:1rem;font-weight:500;color:var(--fg);white-space:nowrap}
 .dial[aria-selected="true"]{border-color:var(--acc);background:var(--panel);box-shadow:inset 0 0 0 1px var(--acc)}
@@ -136,8 +137,6 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .credits a{color:var(--fg)}
 .credits strong{color:var(--fg);font-weight:600}
 .credits summary{cursor:pointer;font-family:var(--mono);font-size:.7rem;letter-spacing:.02em;text-transform:lowercase}
-.transport{display:flex;flex-direction:column;gap:6px;align-items:center}
-.transport #play{flex:1;min-height:52px}
 #maininfobox{display:flex;flex-direction:column;gap:8px}
 #maininfobox[hidden]{display:none}
 #maininfobox p{margin:0}
@@ -153,10 +152,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <div class="wrap">
   <section class="rings" id="rings" role="tablist" aria-label="Orbits"></section>
   <section class="dials" id="dials" aria-label="Transport and global settings">
-    <div class="transport">
-      <button id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playicon" d="M7 4l13 8-13 8z"/></svg></button>
-      <button class="info" id="maininfo" aria-label="How Default Ambience works" aria-expanded="false">i</button>
-    </div>
+    <button id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playicon" d="M7 4l13 8-13 8z"/></svg></button>
   </section>
   <p class="infobox" id="maininfobox" hidden></p>
   <p class="note" id="macrostatus" role="status"></p>
@@ -574,14 +570,13 @@ const DIALS=[["global","Global","--gl"],["master","Master","--fx"],["sessions","
 const dialEls={};
 DIALS.forEach(([key,name,col])=>{
   const b=document.createElement("button"); b.className="dial"; b.setAttribute("role","tab"); b.style.setProperty("--acc",`var(${col})`);
-  b.innerHTML=`<span class="tname">${name}</span><span class="face"></span>`;
+  b.innerHTML=`<span class="tname">${name}</span>`;
   b.onclick=()=>selectTab(key); dialEls[key]=b; dialsEl.append(b);
 });
-function updateDials(){
-  dialEls.global.querySelector(".face").innerHTML=`<b>${G.bpm} bpm</b>${NOTES[G.root]} ${G.scale.split(" ")[0]}`;
-  dialEls.master.querySelector(".face").innerHTML=`<b>${Math.round(G.master*100)}%</b>dly ${Math.round(FX.dRet*100)}<br>rev ${Math.round(FX.rRet*100)}`;
-  const c=loadSessions().length; dialEls.sessions.querySelector(".face").innerHTML=`<b>${c}</b>saved`;
-}
+{ const ib=document.createElement("button"); ib.className="info"; ib.id="maininfo";
+  ib.setAttribute("aria-label","How Default Ambience works"); ib.setAttribute("aria-expanded","false"); ib.textContent="i";
+  dialsEl.append(ib); }
+function updateDials(){}   // the section buttons are plain labels now
 /* ---- sessions ---- */
 const SESS_KEY="default-ambience-sessions";
 // carry over sessions and theme saved under the app's old name
