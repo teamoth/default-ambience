@@ -114,7 +114,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1}
 .vhead .btn{flex:none;min-width:64px}
-.pages{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;flex:1;min-width:0;align-items:end;position:relative;z-index:1;margin-bottom:-14px} /* 12px panel gap + 2px border: the open tab sits over the box's top edge */
+.pages{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;flex:1;min-width:0}
 .navrow{display:flex;align-items:center;gap:8px}
 .phead .info{margin-left:auto}
 .info{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--muted);
@@ -126,15 +126,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .pages button{font:inherit;font-size:var(--fs-ui);font-weight:500;color:var(--fg);background:var(--raise);border:1px solid var(--line);
   border-radius:8px;min-height:var(--h-ctl);padding:4px 6px;cursor:pointer;white-space:nowrap}
 /* the open tab is outlined, so tabs read as navigation while filled buttons are settings */
-.pages button:not([aria-selected="true"]){margin-bottom:6px}
-/* folder tabs: the open tab has no bottom edge and runs into a box drawn round its contents */
-.pages button[aria-selected="true"]{background:var(--panel);color:var(--acc);border:2px solid var(--acc);border-bottom:0;padding-bottom:6px;
-  border-radius:8px 8px 0 0;min-height:calc(var(--h-ctl) + 8px);font-weight:600}
-/* the tab's contents run edge to edge, so the line under the tabs meets the panel's own border: one outline, not two */
-.tabbody{margin:0 -16px -14px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-width:0;position:relative}
-/* the line under the tabs is drawn as one path: it bends down into the panel's sides and curves up into the open tab */
-.tabline{position:absolute;left:0;top:-12px;width:100%;height:24px;overflow:visible;pointer-events:none;z-index:2}
-/* curved joins where the open tab's sides meet that line */
+.pages button[aria-selected="true"]{background:var(--panel);color:var(--acc);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);font-weight:600}
 .page{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;min-width:0}
 .page .full{grid-column:1 / -1}
 .hint{color:var(--muted);font-size:var(--fs-ui);margin:0;max-width:60ch}
@@ -202,7 +194,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.5";
+const APP_VERSION="1.6";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -784,38 +776,6 @@ function withInfo(nav,key){
   const row=document.createElement("div"); row.className="navrow"; row.append(nav,b);
   return [row,box];
 }
-// Moves everything that follows the tab row into one box, so the open tab can join it.
-function boxTabContents(){
-  const nav=panel.querySelector(".pages"); if(!nav) return;
-  const row=nav.parentElement===panel?nav:nav.parentElement;
-  const box=document.createElement("div"); box.className="tabbody";
-  const btns=[...nav.children], i=btns.findIndex(b=>b.getAttribute("aria-selected")==="true");
-  if(i===0) box.classList.add("first"); if(i===btns.length-1) box.classList.add("last");
-  while(row.nextSibling) box.append(row.nextSibling);
-  row.after(box);
-  requestAnimationFrame(drawTabLine);
-}
-// Draws the line under the tabs from the open tab's real position. Each bend has radius 8;
-// when the open tab sits close to the panel's edge, both bends shrink to fit, making one smooth S.
-function drawTabLine(){
-  const box=panel.querySelector(".tabbody"), tab=panel.querySelector('.pages button[aria-selected="true"]');
-  if(!box||!tab) return;
-  box.querySelector(".tabline")?.remove();
-  const b=box.getBoundingClientRect(), t=tab.getBoundingClientRect(), W=b.width, y=13;
-  const xl=t.left-b.left+1, xr=t.right-b.left-1;          // centres of the tab's side lines
-  const fit=gap=>Math.max(1,Math.min(8,(gap)/2));
-  const rl=fit(xl-1), rr=fit(W-1-xr);
-  const ns="http://www.w3.org/2000/svg", svg=document.createElementNS(ns,"svg");
-  svg.setAttribute("class","tabline"); svg.setAttribute("viewBox",`0 0 ${W} 24`); svg.setAttribute("aria-hidden","true");
-  const d=`M1 ${y+rl} A${rl} ${rl} 0 0 1 ${1+rl} ${y} L${xl-rl} ${y} A${rl} ${rl} 0 0 0 ${xl} ${y-rl}`+
-          ` M${xr} ${y-rr} A${rr} ${rr} 0 0 0 ${xr+rr} ${y} L${W-1-rr} ${y} A${rr} ${rr} 0 0 1 ${W-1} ${y+rr}`;
-  // hide the bottom of the tab's own side lines where the curves take over
-  svg.innerHTML=`<rect x="${xl-1.5}" y="${y-rl}" width="3" height="${rl+4}" fill="var(--panel)"/>`+
-    `<rect x="${xr-1.5}" y="${y-rr}" width="3" height="${rr+4}" fill="var(--panel)"/>`+
-    `<path d="${d}" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round"/>`;
-  box.prepend(svg);
-}
-window.addEventListener("resize",()=>requestAnimationFrame(drawTabLine));
 function pageTabs(names,current,onpick){
   const nav=document.createElement("div"); nav.className="pages"; nav.setAttribute("role","tablist");
   names.forEach(n=>{const b=document.createElement("button"); b.textContent=n; b.setAttribute("role","tab"); b.setAttribute("aria-selected",n===current); b.onclick=()=>onpick(n); nav.append(b);});
@@ -906,7 +866,7 @@ function renderVoice(t){
       full(slider(t,"pan","Pan",-1,1,0.01,v=>v===0?"Centre":(v<0?"L ":"R ")+Math.round(Math.abs(v)*100))));
   }
   const [vi,vbox]=infoToggle(voicePage); head.append(vi);
-  panel.append(head,nav,vbox,page); boxTabContents();
+  panel.append(head,nav,vbox,page);
 }
 
 function panelHead(title,sub,acc){
@@ -972,7 +932,7 @@ function renderMaster(){
   } else page=pageGrid(
     slider(FX,"rRet","Level",0,1,0.01,pct,updateDials), slider(FX,"rTime","Decay time",0,1,0.01,pct),
     slider(FX,"rDamp","Damping",0,1,0.01,pct), slider(FX,"rPre","Pre-delay",0,0.25,0.005,v=>Math.round(v*1000)+" ms"));
-  panel.append(vol,...withInfo(nav,fxPage),page); boxTabContents();
+  panel.append(vol,...withInfo(nav,fxPage),page);
 }
 function settingsSummary(){
   const vname=v=>isMacro(v)?(MACRO.find(([i])=>"m:"+i===v)||[0,"?"])[1]:v;
@@ -985,7 +945,7 @@ let sessPage="Sessions";
 function renderSessions(){
   panelHead("Session","","--ss");
   panel.append(...withInfo(pageTabs(["Sessions","Blend"],sessPage,n=>{sessPage=n; renderSessions();}),sessPage==="Blend"?"Blend":"Session"));
-  sessPage==="Blend"?blendBody():sessionsBody(); boxTabContents();
+  sessPage==="Blend"?blendBody():sessionsBody();
 }
 const mkBtn=t=>{const b=document.createElement("button"); b.className="btn"; b.textContent=t; return b;};
 function twoTap(btn,label,action){ // confirm destructive actions with a second tap
