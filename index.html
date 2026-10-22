@@ -38,8 +38,7 @@ img{max-width:100%}
   color-scheme:light;
 }
 html,body{background:var(--bg);color:var(--fg)}
-html{text-transform:lowercase}
-button,select,option,optgroup{text-transform:inherit}
+button,select,option,optgroup{text-transform:none}
 textarea,input,.credits p{text-transform:none}
 body{font-family:var(--body);font-size:15px;line-height:1.45;
   padding-left:max(16px, env(safe-area-inset-left, 0px));
@@ -47,7 +46,7 @@ body{font-family:var(--body);font-size:15px;line-height:1.45;
   padding-block:20px 40px}
 .wrap{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 .sub{color:var(--muted);font-size:.85rem;margin:6px 0 0;max-width:52ch}
-.label{font-family:var(--mono);font-size:.74rem;letter-spacing:.02em;text-transform:lowercase;color:var(--muted)}
+.label{font-family:var(--mono);font-size:.74rem;letter-spacing:.02em;color:var(--muted)}
 button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 
 #play{width:100%;height:44px;border-radius:12px;border:none;background:var(--fg);color:var(--bg);
@@ -75,6 +74,7 @@ select{font:inherit;font-size:.9rem;background:var(--raise);color:var(--fg);bord
 .seg button[aria-pressed="true"],.btn[aria-pressed="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 .btn:active,.seg button:active{filter:brightness(1.15)}
 .btn.armed{border-color:var(--acc);color:var(--acc)}
+.btn.primary{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 
 /* rings */
 .rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 -6px}
@@ -145,7 +145,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .credits{color:var(--muted);font-size:.78rem;max-width:72ch}
 .credits a{color:var(--fg)}
 .credits strong{color:var(--fg);font-weight:600}
-.credits summary{cursor:pointer;font-family:var(--mono);font-size:.7rem;letter-spacing:.02em;text-transform:lowercase}
+.credits summary{cursor:pointer;font-family:var(--mono);font-size:.7rem;letter-spacing:.02em}
 #maininfobox{display:flex;flex-direction:column;gap:8px}
 #maininfobox[hidden]{display:none}
 #maininfobox p{margin:0}
@@ -684,7 +684,7 @@ function updateBlendBar(){
   document.getElementById("bfrom").textContent=BLEND.fromName;
   document.getElementById("bto").textContent=BLEND.toName;
   const left=(1-BLEND.pos)*BLEND.dur, mmss=x=>Math.floor(x/60)+":"+String(Math.floor(x%60)).padStart(2,"0");
-  document.getElementById("btime").textContent=BLEND.pos>=1?"arrived":BLEND.dur>0&&BLEND.running?(playing?mmss(left):"on play"):Math.round(BLEND.pos*100)+"%";
+  document.getElementById("btime").textContent=BLEND.pos>=1?"Arrived":BLEND.dur>0&&BLEND.running?(playing?mmss(left):"On play"):Math.round(BLEND.pos*100)+"%";
   const pb=document.getElementById("bpause");
   pb.hidden=BLEND.dur<=0;
   pb.textContent=BLEND.running?"\u275A\u275A":"\u25B6"; pb.setAttribute("aria-label",BLEND.running?"Pause drift":(BLEND.pos>=1?"Drift again from the start":"Resume drift"));
@@ -740,7 +740,8 @@ const INFO={
   "Delay":"Every orbit feeds this delay through its Delay send (Mix tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
   "Global":"Tempo applies to all four orbits. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. Theme switches between dark and light.",
-  "Session":"Blend glides from one setup to another: numbers move smoothly, and choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. ✕ ends the blend and keeps the sound as it is. Presets are built in and always available; loading one replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
+  "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
+  "Session":"Presets are built in and always available; loading one replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
 };
 const MAIN_INFO=[
   "Each orbit is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last one played.",
@@ -770,6 +771,7 @@ function pageTabs(names,current,onpick){
 }
 function pageGrid(...els){const p=document.createElement("div"); p.className="page"; els.forEach(e=>e&&p.append(e)); return p;}
 const full=el=>{el.classList.add("full"); return el;};
+function sectHead(txt){const d=document.createElement("div"); d.className="secthead full"; d.textContent=txt; return d;}
 function hint(txt){const p=document.createElement("p"); p.className="hint full"; p.textContent=txt; return p;}
 
 function renderVoice(t){
@@ -789,7 +791,6 @@ function renderVoice(t){
   const sect=txt=>{const d=document.createElement("div"); d.className="secthead full"; d.textContent=txt; return d;};
   if(voicePage==="Pattern"){
     const btns=document.createElement("div"); btns.className="ctl";
-    btns.innerHTML=`<span class="label">Melody</span>`;
     const tiles=document.createElement("div"); tiles.className="tiles"; btns.append(tiles);
     const reroll=mk("New melody","Pick a fresh set of notes"), lock=mk("Melody lock","Repeat the current notes instead of picking new ones");
     lock.setAttribute("aria-pressed",t.lock);
@@ -809,7 +810,7 @@ function renderVoice(t){
       slider(t,"swing","Swing",0,60,1,v=>v+"%"));
   } else if(voicePage==="Sound"){
     const vs=document.createElement("div"); vs.className="ctl full";
-    vs.innerHTML=`<label class="label" for="voicesel">Voice type</label><select id="voicesel">${MACRO.map(([i,n])=>`<option value="m:${i}">${n}</option>`).join("")}</select>`;
+    vs.innerHTML=`<select id="voicesel" aria-label="Voice type">${MACRO.map(([i,n])=>`<option value="m:${i}">${n}</option>`).join("")}</select>`;
     const vsel=vs.querySelector("select"); vsel.value=t.voice; vsel.onchange=()=>{t.voice=vsel.value; rerender();};
     const adsr=t.envMode==="adsr";
     const eng=+t.voice.slice(2), [k1,k2,k3]=KNOBS[eng]||["Harmonics","Timbre","Morph"], own=SELF_ENVELOPED.has(eng);
@@ -817,7 +818,7 @@ function renderVoice(t){
       slider(t,"morph",k3,0,1,0.01,pct),
       ...(own?[]:[slider(t,"colour","Gate colour",0,1,0.01,pct),
         adsr?hint("Decay is set by the ADSR on the Motion tab."):slider(t,"mdecay","Decay",0,1,0.01,pct)]),
-      sect("Filter"), full(seg(t,"ftype","Type",[["lowpass","Low-pass"],["bandpass","Band-pass"],["highpass","High-pass"]])),
+      sect("Filter"), full(seg(t,"ftype","Filter type",[["lowpass","Low-pass"],["bandpass","Band-pass"],["highpass","High-pass"]],null,true)),
       slider(t,"cutoff","Cutoff",0,1,0.005,hz), slider(t,"res","Resonance",0,1,0.01,pct),
       slider(t,"fenv","Envelope amount",-1,1,0.01,v=>(v>0?"+":"")+Math.round(v*100)+"%"), slider(t,"fdec","Envelope decay",0.01,2,0.01,ms));
   } else if(voicePage==="Motion"){
@@ -928,9 +929,11 @@ function settingsSummary(){
   lines.push(`Delay ${delayLabel()} level ${Math.round(FX.dRet*100)}%, reverb level ${Math.round(FX.rRet*100)}%`);
   return lines.join("\n");
 }
+let sessPage="Sessions";
 function renderSessions(){
-  const sh=panelHead("Session","","--ss"); const [si,sbox]=infoToggle("Session"); sh.append(si); panel.append(sbox);
-  sessionsBody();
+  panelHead("Session","","--ss");
+  panel.append(...withInfo(pageTabs(["Sessions","Blend"],sessPage,n=>{sessPage=n; renderSessions();}),sessPage==="Blend"?"Blend":"Session"));
+  sessPage==="Blend"?blendBody():sessionsBody();
 }
 const mkBtn=t=>{const b=document.createElement("button"); b.className="btn"; b.textContent=t; return b;};
 function twoTap(btn,label,action){ // confirm destructive actions with a second tap
@@ -946,8 +949,8 @@ function copyText(text,status,selectEl){
 }
 function sessionsBody(){
   const wrap=document.createElement("div"); wrap.className="page";
-  const pre=document.createElement("div"); pre.className="ctl full"; pre.style.cssText="gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line)";
-  pre.innerHTML=`<span class="label">Presets</span>`;
+  wrap.append(sectHead("Presets"));
+  const pre=document.createElement("div"); pre.className="ctl full"; pre.style.cssText="gap:8px";
   const preStatus=document.createElement("p"); preStatus.className="note"; preStatus.setAttribute("role","status"); preStatus.style.margin="0";
   PRESETS.forEach(pr=>{
     const row=document.createElement("div");
@@ -957,32 +960,17 @@ function sessionsBody(){
     row.append(b); pre.append(row);
   });
   pre.append(preStatus); wrap.append(pre);
-  // blend: glide from one setup to another, by hand or over time
-  const bl=document.createElement("div"); bl.className="ctl full"; bl.style.cssText="gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line)";
-  bl.innerHTML=`<span class="label">Blend</span>`;
-  const saved=loadSessions();
-  const sources=[...PRESETS.map((p,i)=>["p"+i,p.name+" (preset)"]),...saved.map((x,i)=>["s"+i,x.name])];
-  const BS=sessionsBody.blend||(sessionsBody.blend={from:"now",to:sources.length>1?sources[sources.length-1][0]:"p0",dur:300});
-  if(!sources.some(([v])=>v===BS.to)) BS.to="p0";
-  const fromC=choice(BS,"from","From",[["now","What's playing now"],...sources]);
-  const toC=choice(BS,"to","To",sources);
-  const durC=choice(BS,"dur","Drift",[[0,"By hand only"],[30,"30 seconds"],[60,"1 minute"],[120,"2 minutes"],[300,"5 minutes"],[600,"10 minutes"],[1200,"20 minutes"],[1800,"30 minutes"]]);
-  const go=mkBtn("Start blend"); go.style.alignSelf="flex-start";
-  const getSrc=v=>v==="now"?[snapshot(),"now"]:v[0]==="p"?[PRESETS[+v.slice(1)].data,PRESETS[+v.slice(1)].name]:[saved[+v.slice(1)].data,saved[+v.slice(1)].name];
-  go.onclick=()=>{ const [fa,fn]=getSrc(BS.from), [ta,tn]=getSrc(BS.to); startBlend(fa,ta,fn,tn,+BS.dur);
-    preStatus.textContent=""; window.scrollTo({top:0,behavior:"smooth"}); };
-  const grid=pageGrid(fromC,toC,durC); grid.style.gridTemplateColumns="1fr";
-  bl.append(grid,go); wrap.append(bl);
   // save row
   const save=document.createElement("div"); save.className="ctl full";
   const list=loadSessions();
+  wrap.append(sectHead("Your sessions"));
   save.innerHTML=`<label class="label" for="sessname">Save the current setup as</label>
     <div style="display:flex;gap:8px"><input id="sessname" type="text" maxlength="40" style="flex:1;min-width:0;font:inherit;background:var(--raise);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 10px"></div>`;
-  const nameIn=save.querySelector("input"); nameIn.value="session "+(list.length+1);
+  const nameIn=save.querySelector("input"); nameIn.value="Session "+(list.length+1);
   const saveBtn=mkBtn("Save"); save.querySelector("div").append(saveBtn);
   const status=document.createElement("p"); status.className="note full"; status.setAttribute("role","status");
   saveBtn.onclick=()=>{
-    const name=nameIn.value.trim()||("session "+(list.length+1));
+    const name=nameIn.value.trim()||("Session "+(list.length+1));
     const l=loadSessions().slice(); l.unshift({name,saved:new Date().toISOString(),data:snapshot()});
     storeSessions(l); renderSessions(); updateDials();
     document.querySelector("#panel .note[role=status]")&&(document.querySelector("#panel .note[role=status]").textContent=`Saved “${name}”`);
@@ -1005,8 +993,9 @@ function sessionsBody(){
   });
   wrap.append(box);
   // move between devices or browsers
-  const tx=document.createElement("div"); tx.className="ctl full"; tx.style.cssText="gap:8px;padding-top:10px;border-top:1px solid var(--line)";
-  tx.innerHTML=`<span class="label">Move a session to another browser or phone</span>`;
+  wrap.append(sectHead("Share with a code"));
+  const tx=document.createElement("div"); tx.className="ctl full"; tx.style.cssText="gap:8px";
+  tx.innerHTML=`<span class="hint">Copy the current setup as a code to send to a friend or another device, or paste a code here to load it.</span>`;
   const code=document.createElement("textarea"); code.id="sesscode"; code.style.minHeight="90px"; code.placeholder="Paste a session code here. It runs from [start] to [end].";
   const b2=document.createElement("div"); b2.className="btns";
   const cpy=mkBtn("Copy current as code"), ld=mkBtn("Load code");
@@ -1015,6 +1004,28 @@ function sessionsBody(){
   ld.onclick=()=>{ try{restore(decodeSession(code.value)); st2.textContent="Loaded";}catch(e){st2.textContent=e.message;} };
   b2.append(cpy,ld,st2); tx.append(code,b2);
   wrap.append(tx);
+  panel.append(wrap);
+}
+function blendBody(){
+  const wrap=document.createElement("div"); wrap.className="page";
+  wrap.append(sectHead("Blend between two setups"),
+    hint("Glide from one setup to another, by hand or over time. A bar appears under the orbits while a blend is running."));
+  if(BLEND.active) wrap.append(hint(`A blend from “${BLEND.fromName}” to “${BLEND.toName}” is running. Starting a new one replaces it.`));
+  // blend: glide from one setup to another, by hand or over time
+  const bl=document.createElement("div"); bl.className="ctl full"; bl.style.cssText="gap:10px";
+  const saved=loadSessions();
+  const sources=[...PRESETS.map((p,i)=>["p"+i,p.name+" (preset)"]),...saved.map((x,i)=>["s"+i,x.name])];
+  const BS=sessionsBody.blend||(sessionsBody.blend={from:"now",to:sources.length>1?sources[sources.length-1][0]:"p0",dur:300});
+  if(!sources.some(([v])=>v===BS.to)) BS.to="p0";
+  const fromC=choice(BS,"from","From",[["now","What's playing now"],...sources]);
+  const toC=choice(BS,"to","To",sources);
+  const durC=choice(BS,"dur","Drift",[[0,"By hand only"],[30,"30 seconds"],[60,"1 minute"],[120,"2 minutes"],[300,"5 minutes"],[600,"10 minutes"],[1200,"20 minutes"],[1800,"30 minutes"]]);
+  const go=mkBtn("Start blend"); go.style.alignSelf="stretch"; go.classList.add("primary");
+  const getSrc=v=>v==="now"?[snapshot(),"Now"]:v[0]==="p"?[PRESETS[+v.slice(1)].data,PRESETS[+v.slice(1)].name]:[saved[+v.slice(1)].data,saved[+v.slice(1)].name];
+  go.onclick=()=>{ const [fa,fn]=getSrc(BS.from), [ta,tn]=getSrc(BS.to); startBlend(fa,ta,fn,tn,+BS.dur);
+    renderSessions(); window.scrollTo({top:0,behavior:"smooth"}); };
+  const grid=pageGrid(fromC,toC,durC); grid.style.gridTemplateColumns="1fr";
+  bl.append(grid,go); wrap.append(bl);
   panel.append(wrap);
 }
 // The startup sound: a session saved from the app and built in as the default
@@ -1028,7 +1039,7 @@ function makePreset(g,fx,rings){
       ...r, mods:[0,1].map(i=>({...newMod(),...((r.mods||[])[i]||{})}))}))};
 }
 const PRESETS=[
-  {name:"default ambience", about:"slow, soft and evolving", data:DEFAULT_SESSION}
+  {name:"Default Ambience", about:"Slow, soft and evolving", data:DEFAULT_SESSION}
 ];
 restore(DEFAULT_SESSION);
 selectTab(0);
@@ -1074,7 +1085,7 @@ function draw(){
     c.beginPath(); c.arc(cx,cy,72+pulse*12,0,Math.PI*2); c.fillStyle=col; c.globalAlpha=0.1+pulse*0.35; c.fill(); c.globalAlpha=1;
     c.fillStyle=fg; c.textAlign="center"; c.textBaseline="middle";
     c.fillStyle=fg; c.font="600 56px 'IBM Plex Mono', monospace"; c.fillText(t.hits+"/"+t.steps,cx,t.lock?cy-14:cy);
-    if(t.lock){ c.fillStyle=muted; c.font="500 34px 'IBM Plex Mono', monospace"; c.fillText("lock",cx,cy+36); }
+    if(t.lock){ c.fillStyle=muted; c.font="500 34px 'IBM Plex Mono', monospace"; c.fillText("Lock",cx,cy+36); }
   });
   requestAnimationFrame(draw);
 }
