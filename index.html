@@ -194,7 +194,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.0";
+const APP_VERSION="1.1";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -770,8 +770,10 @@ function infoToggle(key){
   return [b,box];
 }
 function withInfo(nav,key){
-  const row=document.createElement("div"); row.className="navrow";
-  const [b,box]=infoToggle(key); row.append(nav,b);
+  const [b,box]=infoToggle(key);
+  const head=panel.querySelector(".phead");
+  if(head){ head.append(b); return [nav,box]; }   // the i sits top right, beside the panel's title
+  const row=document.createElement("div"); row.className="navrow"; row.append(nav,b);
   return [row,box];
 }
 function pageTabs(names,current,onpick){
