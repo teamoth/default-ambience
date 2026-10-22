@@ -714,7 +714,7 @@ function restore(snap){
     if(!Array.isArray(t.mods)||t.mods.length<2) t.mods=[newMod(),newMod()];
     if(!("swing" in st)) t.swing=oldSwing||0;
     if(!isMacro(t.voice)) t.voice="m:8";   // older sessions may use the removed simple synths
-    t.last=0; t.ringEl.classList.toggle("muted",!!t.mute);});
+    t.last=0; t.nnEl.textContent="\u2013"; t.ringEl.classList.toggle("muted",!!t.mute);});
   applyParams(); updateDials();
 }
 tracks.forEach((t,ti)=>{
@@ -1039,7 +1039,13 @@ function makePreset(g,fx,rings){
       ...r, mods:[0,1].map(i=>({...newMod(),...((r.mods||[])[i]||{})}))}))};
 }
 const PRESETS=[
-  {name:"Default Ambience", about:"Slow, soft and evolving", data:DEFAULT_SESSION}
+  {name:"Default Ambience", about:"Slow, soft and evolving", data:DEFAULT_SESSION},
+  // a blank canvas: four silent orbits with plain voices, ready for hits to be added
+  {name:"Empty", about:"No hits yet. Add hits to an orbit to start from scratch", data:makePreset(
+    {bpm:90, root:0, scale:"Yo", master:0.9},
+    {dMode:"sync", dDiv:0.75, dFb:0.35, dTone:0.4, dRet:0.35, rTime:0.8, rDamp:0.45, rPre:0.03, rLow:0.15, rRet:0.6},
+    [0,1,2,3].map(i=>({steps:16, hits:0, rot:0, voice:"m:8", oct:[4,3,5,2][i], span:1, vol:0.6,
+      harm:0.2, timb:0.3, morph:0.3, mdecay:0.5, colour:0.4, cutoff:0.8, dSend:0.2, rSend:0.3, pan:[-0.3,0.3,-0.15,0][i]})))}
 ];
 restore(DEFAULT_SESSION);
 selectTab(0);
