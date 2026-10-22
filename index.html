@@ -114,7 +114,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1}
 .vhead .btn{flex:none;min-width:64px}
-.pages{display:flex;flex-wrap:wrap;gap:2px 0;margin:0 -4px;padding:0;flex:1;min-width:0}
+.pages{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;flex:1;min-width:0}
 .navrow{display:flex;align-items:center;gap:8px}
 .phead .info{margin-left:auto}
 .info{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--muted);
@@ -123,9 +123,10 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 #maininfo{--acc:var(--fg)}
 .infobox{margin:0;padding:10px 12px;border-radius:10px;background:var(--raise);color:var(--fg);font-size:var(--fs-ui);line-height:1.5}
 .pages::-webkit-scrollbar{display:none}
-.pages button{font:inherit;font-size:var(--fs-ui);font-weight:500;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;
-  padding:6px 6px;cursor:pointer;white-space:nowrap}
-.pages button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--acc)}
+.pages button{font:inherit;font-size:var(--fs-ui);font-weight:500;color:var(--fg);background:var(--raise);border:1px solid var(--line);
+  border-radius:8px;min-height:var(--h-ctl);padding:4px 6px;cursor:pointer;white-space:nowrap}
+/* the open tab is outlined, so tabs read as navigation while filled buttons are settings */
+.pages button[aria-selected="true"]{background:var(--panel);color:var(--acc);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);font-weight:600}
 .page{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;min-width:0}
 .page .full{grid-column:1 / -1}
 .hint{color:var(--muted);font-size:var(--fs-ui);margin:0;max-width:60ch}
@@ -147,6 +148,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .page>.secthead:first-child{border-top:none;padding-top:0;margin-top:0}
 .dim{opacity:.45}
 
+.version{margin:0;font-family:var(--mono);font-size:.72rem;color:var(--muted)}
 .credits{color:var(--muted);font-size:.78rem;max-width:72ch}
 .credits a{color:var(--fg)}
 .credits strong{color:var(--fg);font-weight:600}
@@ -177,6 +179,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
   <p class="note" id="macrostatus" role="status"></p>
   <section class="panel" id="panel" role="tabpanel"></section>
 
+  <p class="version" id="appversion"></p>
   <details class="credits">
     <summary>Credits and licences</summary>
     <p><strong>Default Ambience</strong> is free software: you can share and change it under the terms of the GNU General Public License, version 3. It comes with no warranty. The source code is at <a href="https://github.com/teamoth/default-ambience" target="_blank" rel="noopener">github.com/teamoth/default-ambience</a>.</p>
@@ -191,6 +194,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
+const APP_VERSION="1.0";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -753,7 +757,8 @@ const MAIN_INFO=[
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (notes and rhythm), Sound (voice and filter), Motion (envelope and modulation) and Mix.",
   "Below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and theme. Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, and session codes you can share.",
-  "The i button on each page explains its controls."];
+  "The i button on each page explains its controls.",
+  "Default Ambience, version "+APP_VERSION+"."];
 
 { const b=document.getElementById("maininfo"), box=document.getElementById("maininfobox"); MAIN_INFO.forEach(t=>{const p=document.createElement("p"); p.textContent=t; box.append(p);});
   b.onclick=()=>{ box.hidden=!box.hidden; b.setAttribute("aria-expanded",!box.hidden); }; }
@@ -1109,6 +1114,7 @@ function draw(){
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);
+document.getElementById("appversion").textContent="Default Ambience \u00b7 version "+APP_VERSION;
 // works offline once loaded
 if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
