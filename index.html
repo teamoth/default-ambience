@@ -83,6 +83,8 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 
 /* rings */
 .rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 -6px}
+/* everything below lines up with the outer edges of the first and last orbit */
+.dials,.panel,.blendbar,#maininfobox{margin-left:-6px;margin-right:-6px}
 .ring{--acc:var(--t1);font:inherit;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:16px;
   padding:4px 1px 3px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0;border-radius:12px;min-width:0;transition:background .15s,border-color .15s}
 .ring canvas{width:100%;max-width:200px;aspect-ratio:1;height:auto}
@@ -194,7 +196,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.6";
+const APP_VERSION="1.7";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
