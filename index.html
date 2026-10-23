@@ -25,7 +25,7 @@ img{max-width:100%}
   --bg:#13141d; --panel:#1b1d29; --raise:#242737; --line:#30344a;
   --fg:#ebe6da; --muted:#9093a8;
   --t1:#eaa53c; --t2:#5fc4b6; --t3:#e07a9b; --t4:#7aa7f2;
-  --gl:#b9d064; --fx:#b39cf0; --ss:#c3c6d6;
+  --gl:#b9d064; --fx:#b39cf0; --ss:#c3c6d6; --help:#f08a4b;
   /* control scale: one text size and two heights for every button, tab and menu */
   --fs-ui:.84rem; --h-ctl:32px; --h-main:38px;
   --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -36,7 +36,7 @@ img{max-width:100%}
   --bg:#f3f2ee; --panel:#ffffff; --raise:#ebeae5; --line:#d5d3cb;
   --fg:#1c1d26; --muted:#676978;
   --t1:#b8730c; --t2:#178a7b; --t3:#c03f6a; --t4:#3567cc;
-  --gl:#62821a; --fx:#6b55d4; --ss:#5b5f72;
+  --gl:#62821a; --fx:#6b55d4; --ss:#5b5f72; --help:#cf5a1f;
   color-scheme:light;
 }
 html,body{background:var(--bg);color:var(--fg)}
@@ -80,6 +80,18 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 .sessrow .sname{font-weight:600;font-size:.9rem}
 .sessrow input,#sessname{font:inherit;font-size:var(--fs-ui);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;min-width:0}
 .pickrow{display:flex;gap:8px;align-items:center}
+.foot{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.foot .textlink{font-size:.72rem}
+.modal{position:fixed;inset:0;z-index:20;background:color-mix(in srgb,#000 45%,transparent);display:grid;place-items:center;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.modal[hidden]{display:none}
+.modalcard{--acc:var(--help);box-sizing:border-box;width:min(480px,100%);max-height:100%;overflow:auto;background:var(--panel);border:2px solid var(--acc);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.modalcard textarea{min-height:120px}
+.modalcard input[type=text],.modalcard input[type=email]{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%;box-sizing:border-box}
+#fbfields{display:flex;flex-direction:column;gap:4px}
+#fbfields[hidden],#fbsend[hidden]{display:none}
+#fbfields .label{margin-top:6px}
+.hp{position:absolute;left:-9999px;opacity:0}
 .pickrow select,.pickrow input{flex:1;min-width:0}
 .btn.primary{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 
@@ -124,8 +136,10 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .info{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--muted);
   font-family:var(--mono);font-size:.8rem;font-weight:500;cursor:pointer;display:grid;place-items:center;padding:0}
 .info[aria-expanded="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc)}
-#maininfo{--acc:var(--fg)}
-.info.inline{display:inline-grid;width:20px;height:20px;font-size:.72rem;vertical-align:-3px;margin:0 2px;cursor:default}
+/* the main help button stands out: filled in its own colour */
+#maininfo{--acc:var(--help);width:30px;height:30px;background:var(--help);border-color:var(--help);color:var(--bg);font-family:var(--body);font-size:1rem;font-weight:700}
+#maininfo[aria-expanded="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--help) 30%,transparent)}
+.ifont{font-family:var(--mono);font-weight:600}
 .textlink{font:inherit;color:inherit;background:none;border:none;padding:0;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .infobox{margin:0;padding:10px 12px;border-radius:10px;background:var(--raise);color:var(--fg);font-size:var(--fs-ui);line-height:1.5}
 .pages::-webkit-scrollbar{display:none}
@@ -185,7 +199,25 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
   <p class="note" id="macrostatus" role="status"></p>
   <section class="panel" id="panel" role="tabpanel"></section>
 
-  <p class="version" id="appversion"></p>
+  <div class="foot"><p class="version" id="appversion"></p><button class="textlink note" id="feedbackbtn">Send feedback</button></div>
+  <div class="modal" id="feedback" hidden role="dialog" aria-modal="true" aria-labelledby="fbtitle">
+    <form class="modalcard" id="fbform" novalidate>
+      <div class="phead"><span class="tname" id="fbtitle">Send feedback</span><button type="button" class="info" id="fbclose" aria-label="Close">&#x2715;</button></div>
+      <p class="hint">Comments, ideas or bugs: they go straight to the developer. Add your email if you'd like a reply.</p>
+      <div id="fbfields">
+        <label class="label" for="fbmsg">Message</label>
+        <textarea id="fbmsg" name="message" required maxlength="4000" placeholder="What's on your mind?"></textarea>
+        <label class="label" for="fbname">Name (optional)</label>
+        <input id="fbname" name="name" type="text" maxlength="80" autocomplete="name">
+        <label class="label" for="fbemail">Email, for a reply (optional)</label>
+        <input id="fbemail" name="email" type="email" maxlength="120" autocomplete="email">
+        <input type="checkbox" name="botcheck" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <div class="h-captcha" data-captcha="true"></div>
+      </div>
+      <p class="note" id="fbstatus" role="status"></p>
+      <div class="btns"><button type="submit" class="btn primary" id="fbsend">Send</button><button type="button" class="btn" id="fbcancel">Cancel</button></div>
+    </form>
+  </div>
   <details class="credits">
     <summary>Credits and licences</summary>
     <p><strong>Default Ambience</strong> is free software: you can share and change it under the terms of the GNU General Public License, version 3. It comes with no warranty. The source code is at <a href="https://github.com/teamoth/default-ambience" target="_blank" rel="noopener">github.com/teamoth/default-ambience</a>.</p>
@@ -198,9 +230,10 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
   </details>
 </div>
 
+<script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.8";
+const APP_VERSION="1.9";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -767,15 +800,17 @@ const MAIN_INFO=[
   "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
   "The [i] button on each page explains its controls.",
   "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by the amazing Emilie Gillet (see [credits] at bottom of page).",
-  "This project is still in active development."];
+  "This project is still in active development.",
+  "Comments or suggestions? [feedback]"];
 
 { const b=document.getElementById("maininfo"), box=document.getElementById("maininfobox");
   MAIN_INFO.forEach(t=>{
     const p=document.createElement("p");
     const bold=t.startsWith("**"); if(bold){ t=t.slice(2,-2); p.style.fontWeight="600"; }
     // build the line piece by piece so the special tokens become real elements
-    t.split(/(\[i\]|\[credits\])/).forEach(part=>{
-      if(part==="[i]"){ const i=document.createElement("span"); i.className="info inline"; i.textContent="i"; i.setAttribute("aria-hidden","true"); p.append(i); }
+    t.split(/(\[i\]|\[credits\]|\[feedback\])/).forEach(part=>{
+      if(part==="[i]"){ const i=document.createElement("span"); i.className="ifont"; i.textContent="i"; p.append(i); }
+      else if(part==="[feedback]"){ const a=document.createElement("button"); a.className="textlink"; a.textContent="Send feedback"; a.onclick=openFeedback; p.append(a); }
       else if(part==="[credits]"){ const a=document.createElement("button"); a.className="textlink"; a.textContent="Credits and licences";
         a.onclick=()=>{ const d=document.querySelector("details.credits"); d.open=true; d.scrollIntoView({behavior:"smooth",block:"start"}); }; p.append(a); }
       else p.append(part);
@@ -1145,6 +1180,48 @@ function draw(){
 }
 requestAnimationFrame(draw);
 document.getElementById("appversion").textContent="Default Ambience \u00b7 version "+APP_VERSION;
+/* ================= feedback =================
+   Messages are sent through Web3Forms (web3forms.com), which forwards them to the developer's inbox.
+   The access key is public by design: it can only send messages to that inbox, and hCaptcha keeps bots out. */
+const FEEDBACK={key:"", endpoint:"https://api.web3forms.com/submit"};
+const ON_WEBSITE=!!window.DA_SITE;   // set by the website build; the Claude preview can't reach outside services
+let captchaLoaded=false;
+function openFeedback(){
+  const m=document.getElementById("feedback"), st=document.getElementById("fbstatus"), fields=document.getElementById("fbfields"), send=document.getElementById("fbsend");
+  m.hidden=false; st.textContent="";
+  const ready=ON_WEBSITE&&FEEDBACK.key;
+  fields.hidden=!ready; send.hidden=!ready;
+  if(!ON_WEBSITE) st.innerHTML='Feedback can be sent from the website version: <span class="ifont">teamoth.github.io/default-ambience</span>';
+  else if(!FEEDBACK.key) st.textContent="Feedback isn't switched on yet. Please check back soon.";
+  else { if(!captchaLoaded){ captchaLoaded=true; const sc=document.createElement("script"); sc.src="https://web3forms.com/client/script.js"; sc.async=true; sc.defer=true; document.body.append(sc); }
+    setTimeout(()=>document.getElementById("fbmsg").focus(),50); }
+}
+function closeFeedback(){ document.getElementById("feedback").hidden=true; }
+document.getElementById("feedbackbtn").onclick=openFeedback;
+document.getElementById("fbclose").onclick=closeFeedback;
+document.getElementById("fbcancel").onclick=closeFeedback;
+document.getElementById("feedback").addEventListener("click",e=>{ if(e.target.id==="feedback") closeFeedback(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!document.getElementById("feedback").hidden) closeFeedback(); });
+document.getElementById("fbform").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const f=e.target, st=document.getElementById("fbstatus"), send=document.getElementById("fbsend");
+  const msg=f.message.value.trim();
+  if(!msg){ st.textContent="Please write a message first."; f.message.focus(); return; }
+  const fd=new FormData(f);
+  if(!fd.get("h-captcha-response")){ st.textContent="Please complete the check above the Send button."; return; }
+  fd.append("access_key",FEEDBACK.key);
+  fd.append("subject","Default Ambience feedback");
+  fd.append("from_name","Default Ambience");
+  fd.append("app_version",APP_VERSION);
+  send.disabled=true; st.textContent="Sending…";
+  try{
+    const r=await fetch(FEEDBACK.endpoint,{method:"POST",body:fd,headers:{Accept:"application/json"}});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.success!==false){ st.textContent="Thanks! Your message has been sent."; f.reset(); if(window.hcaptcha) try{hcaptcha.reset();}catch(_){} setTimeout(closeFeedback,1800); }
+    else st.textContent="That didn't send ("+(j.message||("error "+r.status))+"). Please try again.";
+  }catch(err){ st.textContent="That didn't send. Check your connection and try again."; }
+  send.disabled=false;
+});
 // works offline once loaded
 if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
