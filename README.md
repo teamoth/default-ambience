@@ -7,10 +7,10 @@ A Euclidean sequencer for ambient music, made for phones and browsers.
 Four **orbits** each loop a rhythm: a number of hits spread as evenly as possible around a number of steps. Every hit picks a note from the scale you choose, so the melodies are random but always in key. Orbits of different lengths drift in and out of line with each other, so the music keeps changing.
 
 - 21 voice types, built from open-source Eurorack synthesiser code
-- 24 scales, including Yo, In, Hirajoshi, Kumoi, pentatonics and the modes
+- 24 scales, including Yo, In, Hirajoshi, Kumoi and pentatonics
 - Per-orbit filter, ADSR envelope, two slow modulators, swing and melody lock
-- Shared delay and reverb
-- Sessions you can save, and share with anyone as a `[start]...[end]` code
+- Sends to master delay and reverb
+- Sessions you can save, and share with anyone as a string of text
 - Works offline once loaded, and can be installed from the browser
 
 ## Use it
