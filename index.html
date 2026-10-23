@@ -79,6 +79,8 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 .sessrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:var(--raise);border:1px solid var(--line);border-radius:10px}
 .sessrow .sname{font-weight:600;font-size:.9rem}
 .sessrow input,#sessname{font:inherit;font-size:var(--fs-ui);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 8px;min-width:0}
+.pickrow{display:flex;gap:8px;align-items:center}
+.pickrow select,.pickrow input{flex:1;min-width:0}
 .btn.primary{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 
 /* rings */
@@ -123,6 +125,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
   font-family:var(--mono);font-size:.8rem;font-weight:500;cursor:pointer;display:grid;place-items:center;padding:0}
 .info[aria-expanded="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc)}
 #maininfo{--acc:var(--fg)}
+.info.inline{display:inline-grid;width:20px;height:20px;font-size:.72rem;vertical-align:-3px;margin:0 2px;cursor:default}
+.textlink{font:inherit;color:inherit;background:none;border:none;padding:0;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .infobox{margin:0;padding:10px 12px;border-radius:10px;background:var(--raise);color:var(--fg);font-size:var(--fs-ui);line-height:1.5}
 .pages::-webkit-scrollbar{display:none}
 .pages button{font:inherit;font-size:var(--fs-ui);font-weight:500;color:var(--fg);background:var(--raise);border:1px solid var(--line);
@@ -196,7 +200,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.7";
+const APP_VERSION="1.8";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -602,7 +606,7 @@ DIALS.forEach(([key,name,col])=>{
   b.onclick=()=>selectTab(key); dialEls[key]=b; dialsEl.append(b);
 });
 { const ib=document.createElement("button"); ib.className="info"; ib.id="maininfo";
-  ib.setAttribute("aria-label","How Default Ambience works"); ib.setAttribute("aria-expanded","false"); ib.textContent="i";
+  ib.setAttribute("aria-label","How Default Ambience works"); ib.setAttribute("aria-expanded","false"); ib.textContent="?";
   dialsEl.append(ib); }
 function updateDials(){}   // the section buttons are plain labels now
 /* ---- sessions ---- */
@@ -755,16 +759,30 @@ const INFO={
   "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
 };
 const MAIN_INFO=[
-  "Each orbit is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last one played.",
+  "**Welcome! This is Default Ambience.**",
+  "Some info about what's going on here:",
+  "Each of the 4 circular 'orbits' is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (notes and rhythm), Sound (voice and filter), Motion (envelope and modulation) and Mix.",
-  "Below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and theme. Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, and session codes you can share.",
-  "The i button on each page explains its controls.",
-  "Default Ambience, version "+APP_VERSION+"."];
+  "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
+  "The [i] button on each page explains its controls.",
+  "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by the amazing Emilie Gillet (see [credits] at bottom of page).",
+  "This project is still in active development."];
 
-{ const b=document.getElementById("maininfo"), box=document.getElementById("maininfobox"); MAIN_INFO.forEach(t=>{const p=document.createElement("p"); p.textContent=t; box.append(p);});
-  b.onclick=()=>{ box.hidden=!box.hidden; b.setAttribute("aria-expanded",!box.hidden); }; }
-function infoToggle(key){
+{ const b=document.getElementById("maininfo"), box=document.getElementById("maininfobox");
+  MAIN_INFO.forEach(t=>{
+    const p=document.createElement("p");
+    const bold=t.startsWith("**"); if(bold){ t=t.slice(2,-2); p.style.fontWeight="600"; }
+    // build the line piece by piece so the special tokens become real elements
+    t.split(/(\[i\]|\[credits\])/).forEach(part=>{
+      if(part==="[i]"){ const i=document.createElement("span"); i.className="info inline"; i.textContent="i"; i.setAttribute("aria-hidden","true"); p.append(i); }
+      else if(part==="[credits]"){ const a=document.createElement("button"); a.className="textlink"; a.textContent="Credits and licences";
+        a.onclick=()=>{ const d=document.querySelector("details.credits"); d.open=true; d.scrollIntoView({behavior:"smooth",block:"start"}); }; p.append(a); }
+      else p.append(part);
+    });
+    box.append(p);
+  });
+  b.onclick=()=>{ box.hidden=!box.hidden; b.setAttribute("aria-expanded",!box.hidden); }; }function infoToggle(key){
   const b=document.createElement("button"); b.className="info"; b.textContent="i";
   b.setAttribute("aria-label","About "+key); b.setAttribute("aria-expanded","false");
   const box=document.createElement("p"); box.className="infobox"; box.textContent=INFO[key]||""; box.hidden=true;
@@ -964,56 +982,64 @@ function copyText(text,status,selectEl){
 function sessionsBody(){
   const wrap=document.createElement("div"); wrap.className="page";
   wrap.append(sectHead("Presets"));
-  const pre=document.createElement("div"); pre.className="ctl full"; pre.style.cssText="gap:8px";
+  // presets: pick one from the list, its description shows underneath
+  const PS=sessionsBody.pre||(sessionsBody.pre={i:0}); if(PS.i>=PRESETS.length) PS.i=0;
+  const pre=document.createElement("div"); pre.className="ctl full"; pre.style.gap="6px";
+  pre.innerHTML=`<div class="pickrow"><select id="presetsel" aria-label="Preset">${PRESETS.map((p,i)=>`<option value="${i}">${p.name}</option>`).join("")}</select></div>
+    <span class="note" id="presetabout"></span>`;
+  const psel=pre.querySelector("select"), pabout=pre.querySelector("#presetabout");
+  const pload=mkBtn("Load"); pre.querySelector(".pickrow").append(pload);
   const preStatus=document.createElement("p"); preStatus.className="note"; preStatus.setAttribute("role","status"); preStatus.style.margin="0";
-  PRESETS.forEach(pr=>{
-    const row=document.createElement("div"); row.className="sessrow"; row.style.flexWrap="nowrap";
-    row.innerHTML=`<div style="flex:1;min-width:0"><div class="sname">${pr.name}</div><div class="note">${pr.about}</div></div>`;
-    const b=mkBtn("Load"); b.onclick=()=>{ restore(clone(pr.data)); preStatus.textContent=`Loaded “${pr.name}”`; };
-    row.append(b); pre.append(row);
-  });
-  pre.append(preStatus); wrap.append(pre);
-  // save row
-  const save=document.createElement("div"); save.className="ctl full";
+  const showPre=()=>{ psel.value=String(PS.i); pabout.textContent=PRESETS[PS.i].about; };
+  psel.onchange=()=>{ PS.i=+psel.value; showPre(); preStatus.textContent=""; };
+  pload.onclick=()=>{ const pr=PRESETS[PS.i]; restore(clone(pr.data)); preStatus.textContent=`Loaded “${pr.name}”`; };
+  showPre(); pre.append(preStatus); wrap.append(pre);
+
+  // your sessions: save the current setup, then pick a saved one from the list to load, rename, update or delete
   const list=loadSessions();
   wrap.append(sectHead("Your sessions"));
+  const save=document.createElement("div"); save.className="ctl full";
   save.innerHTML=`<label class="label" for="sessname">Save the current setup as</label>
-    <div style="display:flex;gap:8px"><input id="sessname" type="text" maxlength="40" style="flex:1"></div>`;
+    <div class="pickrow"><input id="sessname" type="text" maxlength="40"></div>`;
   const nameIn=save.querySelector("input"); nameIn.value="Session "+(list.length+1);
-  const saveBtn=mkBtn("Save"); save.querySelector("div").append(saveBtn);
+  const saveBtn=mkBtn("Save"); save.querySelector(".pickrow").append(saveBtn);
   const status=document.createElement("p"); status.className="note full"; status.setAttribute("role","status");
+  const SS=sessionsBody.saved||(sessionsBody.saved={i:0});
   saveBtn.onclick=()=>{
     const name=nameIn.value.trim()||("Session "+(list.length+1));
     const l=loadSessions().slice(); l.unshift({name,saved:new Date().toISOString(),data:snapshot()});
-    storeSessions(l); renderSessions(); updateDials();
-    document.querySelector("#panel .note[role=status]")&&(document.querySelector("#panel .note[role=status]").textContent=`Saved “${name}”`);
+    storeSessions(l); SS.i=0; renderSessions(); updateDials();
+    const st=document.querySelector("#panel p.note.full[role=status]"); if(st) st.textContent=`Saved “${name}”`;
   };
-  wrap.append(save,status);
-  // list
-  const box=document.createElement("div"); box.className="full"; box.style.cssText="display:flex;flex-direction:column;gap:8px";
-  if(!list.length){ box.append(hint("No saved sessions yet. Saved sessions keep everything, including locked phrases.")); }
-  list.forEach((it,i)=>{
-    const row=document.createElement("div"); row.className="sessrow";
-    const when=new Date(it.saved);
-    row.innerHTML=`<div style="flex:1;min-width:120px"><div class="sname"></div><div class="note">${when.toLocaleDateString([], {day:"numeric",month:"short"})} ${when.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · ${it.data.G.bpm} bpm · ${NOTES[it.data.G.root]} ${it.data.G.scale}</div></div>`;
-    row.querySelector(".sname").textContent=it.name;
+  wrap.append(save);
+  const box=document.createElement("div"); box.className="ctl full"; box.style.gap="6px";
+  if(!list.length){ box.append(hint("No saved sessions yet. Saved sessions keep everything, including locked melodies.")); }
+  else {
+    if(SS.i>=list.length) SS.i=0;
+    const fmt=it=>{ const w=new Date(it.saved); return `${w.toLocaleDateString([], {day:"numeric",month:"short"})} ${w.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · ${it.data.G.bpm} bpm · ${NOTES[it.data.G.root]} ${it.data.G.scale}`; };
+    box.innerHTML=`<label class="label" for="savedsel">Saved sessions (${list.length})</label><div class="pickrow"><select id="savedsel"></select></div><span class="note" id="savedabout"></span>`;
+    const ssel=box.querySelector("select"), sabout=box.querySelector("#savedabout");
+    list.forEach((it,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=it.name; ssel.append(o); });
+    const show=()=>{ ssel.value=String(SS.i); sabout.textContent=fmt(list[SS.i]); };
+    ssel.onchange=()=>{ SS.i=+ssel.value; show(); status.textContent=""; };
     const load=mkBtn("Load"), ren=mkBtn("Rename"), over=mkBtn("Update"), del=mkBtn("Delete");
-    ren.onclick=()=>{   // swap the name for a text box; Enter or Done saves, Escape cancels
-      const nm=row.querySelector(".sname"), inp=document.createElement("input");
-      inp.type="text"; inp.maxLength=40; inp.value=it.name; inp.setAttribute("aria-label","New name for "+it.name); inp.style.width="100%";
-      nm.replaceWith(inp); inp.focus(); inp.select();
-      ren.textContent="Done";
-      const commit=()=>{ const v=inp.value.trim(); if(v&&v!==it.name){ const l=loadSessions().slice(); l[i]={...l[i],name:v}; storeSessions(l); status.textContent=`Renamed to “${v}”`; } renderSessions(); };
+    box.querySelector(".pickrow").append(load);
+    load.onclick=()=>{ const it=list[SS.i]; try{restore(it.data); status.textContent=`Loaded “${it.name}”`;}catch(e){status.textContent="That session couldn't be loaded.";} };
+    ren.onclick=()=>{   // swap the list for a text box; Enter or Done saves, Escape cancels
+      const it=list[SS.i], inp=document.createElement("input");
+      inp.type="text"; inp.maxLength=40; inp.value=it.name; inp.setAttribute("aria-label","New name for "+it.name);
+      ssel.replaceWith(inp); inp.focus(); inp.select(); ren.textContent="Done";
+      const commit=()=>{ const v=inp.value.trim(); if(v&&v!==it.name){ const l=loadSessions().slice(); l[SS.i]={...l[SS.i],name:v}; storeSessions(l); }
+        renderSessions(); if(v&&v!==it.name){ const st=document.querySelector("#panel p.note.full[role=status]"); if(st) st.textContent=`Renamed to “${v}”`; } };
       ren.onclick=commit;
       inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault(); commit();} if(e.key==="Escape") renderSessions(); });
     };
-    load.onclick=()=>{ try{restore(it.data); status.textContent=`Loaded “${it.name}”`;}catch(e){status.textContent="That session couldn't be loaded.";} };
-    twoTap(over,"Update",()=>{const l=loadSessions().slice(); l[i]={...l[i],saved:new Date().toISOString(),data:snapshot()}; storeSessions(l); renderSessions();});
-    twoTap(del,"Delete",()=>{const l=loadSessions().slice(); l.splice(i,1); storeSessions(l); renderSessions(); updateDials();});
-    const b=document.createElement("div"); b.className="btns"; b.append(load,ren,over,del); row.append(b);
-    box.append(row);
-  });
-  wrap.append(box);
+    twoTap(over,"Update",()=>{const l=loadSessions().slice(); l[SS.i]={...l[SS.i],saved:new Date().toISOString(),data:snapshot()}; storeSessions(l); renderSessions();});
+    twoTap(del,"Delete",()=>{const l=loadSessions().slice(); l.splice(SS.i,1); storeSessions(l); SS.i=0; renderSessions(); updateDials();});
+    const acts=document.createElement("div"); acts.className="btns"; acts.append(ren,over,del); box.append(acts);
+    show();
+  }
+  wrap.append(box,status);
   // move between devices or browsers
   wrap.append(sectHead("Share with a code"));
   const tx=document.createElement("div"); tx.className="ctl full"; tx.style.cssText="gap:8px";
