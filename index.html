@@ -246,7 +246,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.13";
+const APP_VERSION="1.14";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -1355,7 +1355,7 @@ document.getElementById("appversion").textContent="Default Ambience \u00b7 versi
 /* ================= feedback =================
    Messages are sent through Web3Forms (web3forms.com), which forwards them to the developer's inbox.
    The access key is public by design: it can only send messages to that inbox, and hCaptcha keeps bots out. */
-const FEEDBACK={key:"", endpoint:"https://api.web3forms.com/submit"};
+const FEEDBACK={key:"99f7be95-088b-49ac-a1e2-81d2666c06c5", endpoint:"https://api.web3forms.com/submit"};
 const ON_WEBSITE=!!window.DA_SITE;   // set by the website build; the Claude preview can't reach outside services
 let captchaLoaded=false;
 function openFeedback(){
