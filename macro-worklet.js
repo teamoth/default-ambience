@@ -1,5 +1,6 @@
 // Runs the macro-oscillator voices (WebAssembly) inside the audio thread.
 // Ring i plays on engine voices i and i+4 (the second voice lets notes overlap).
+// "trig" messages start a note; "set" messages only update the sound (used for modulation between notes).
 // A voice that hasn't been triggered for a while is silent, so it is skipped entirely to save processing.
 const IDLE_AFTER = 12; // seconds; longer than the longest natural decay
 class MacroOsc extends AudioWorkletProcessor {
@@ -17,7 +18,7 @@ class MacroOsc extends AudioWorkletProcessor {
     }).catch((err) => this.port.postMessage({ type: "error", message: String(err) }));
     this.port.onmessage = (ev) => {
       const d = ev.data;
-      if (d.type === "trig") {
+      if (d.type === "trig" || d.type === "set") {
         this.queue.push(d);
         this.queue.sort((a, b) => a.time - b.time);
       } else if (d.type === "clear") {
@@ -29,13 +30,14 @@ class MacroOsc extends AudioWorkletProcessor {
     if (!this.ready) return true;
     const e = this.e, CH = 8, rings = outputs.length;
     const active = [];
-    for (let v = 0; v < 8; v++) active.push(currentTime - this.lastTrig[v] < IDLE_AFTER || this.queue.some((q) => q.v === v && q.time < currentTime + 128 / sampleRate));
+    for (let v = 0; v < 8; v++) active.push(currentTime - this.lastTrig[v] < IDLE_AFTER || this.queue.some((q) => q.v === v && q.type === "trig" && q.time < currentTime + 128 / sampleRate));
     for (let r = 0; r < rings; r++) if (outputs[r][0]) outputs[r][0].fill(0);
     for (let k = 0; k < 128; k += CH) {
       const t = currentTime + k / sampleRate;
       while (this.queue.length && this.queue[0].time <= t) {
         const d = this.queue.shift();
         e.mo_set(d.v, d.engine, d.harmonics, d.timbre, d.morph, d.decay, d.colour, d.hold ? 1 : 0);
+        if (d.type === "set") continue; // a modulation update: change the sound without starting a note
         e.mo_trigger(d.v, d.note);
         this.lastTrig[d.v] = d.time;
         active[d.v] = true;

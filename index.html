@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Default Ambience</title>
 <meta name="description" content="A Euclidean sequencer for ambient music, with four orbits, scales and a synth engine built from open-source Eurorack code.">
-<meta name="theme-color" content="#f3f2ee">
+<meta name="theme-color" content="#13141d">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -246,7 +246,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.12";
+const APP_VERSION="1.13";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -470,9 +470,23 @@ function applyParams(instant){
 }
 
 /* ---- modulation: LFOs computed on the main thread, applied per note and every scheduler tick ---- */
-const MOD_TARGETS=[["off","Off"],["cutoff","Filter cutoff"],["res","Resonance"],["fenv","Filter env amount"],["fdec","Filter env decay"],
+const MOD_TARGETS=[["off","Off"],["harm","Harmonics"],["timb","Timbre"],["morph","Morph"],["colour","Gate colour"],["mdecay","Voice decay"],
+  ["cutoff","Filter cutoff"],["res","Resonance"],["fenv","Filter env amount"],["fdec","Filter env decay"],
   ["A","Attack"],["D","Decay"],["S","Sustain"],["R","Release"]];
-const RANGES={cutoff:[0,1,0],res:[0,1,0],fenv:[-1,1,0],fdec:[0.01,2,1],A:[0.001,4,1],D:[0.01,4,1],S:[0,1,0],R:[0.01,8,1]}; // [min,max,log]
+const VOICE_MOD_KEYS=["harm","timb","morph","colour","mdecay"];
+// The target list for an orbit, grouped like its pages and named for what each control does on its current voice type.
+// Gate colour and decay only appear when they have an effect (not on struck types, and not with the ADSR envelope).
+function modTargetOptions(t,current){
+  const eng=+t.voice.slice(2), [k1,k2,k3]=KNOBS[eng]||["Harmonics","Timbre","Morph"];
+  const gated=!SELF_ENVELOPED.has(eng)&&t.envMode!=="adsr";
+  const voice=[["harm",k1],["timb",k2],["morph",k3]];
+  if(gated||current==="colour") voice.push(["colour","Gate colour"+(gated?"":" (no effect now)")]);
+  if(gated||current==="mdecay") voice.push(["mdecay","Voice decay"+(gated?"":" (no effect now)")]);
+  return [["off","Off"],{group:"Voice",items:voice},
+    {group:"Filter",items:[["cutoff","Cutoff"],["res","Resonance"],["fenv","Envelope amount"],["fdec","Envelope decay"]]},
+    {group:"Amp envelope",items:[["A","Attack"],["D","Decay"],["S","Sustain"],["R","Release"]]}];
+}
+const RANGES={harm:[0,1,0],timb:[0,1,0],morph:[0,1,0],colour:[0,1,0],mdecay:[0,1,0],cutoff:[0,1,0],res:[0,1,0],fenv:[-1,1,0],fdec:[0.01,2,1],A:[0.001,4,1],D:[0.01,4,1],S:[0,1,0],R:[0.01,8,1]}; // [min,max,log]
 const modHz=r=>0.02*Math.pow(400,r);
 const rnd=(n,seed)=>{const x=Math.sin(n*12.9898+seed*78.233)*43758.5453; return (x-Math.floor(x))*2-1;};
 function lfo(m,T){
@@ -491,12 +505,21 @@ function eff(t,key,T){
   p=Math.min(1,Math.max(0,p+sum*0.5));
   return lg?lo*Math.pow(hi/lo,p):lo+p*(hi-lo);
 }
+let lastVoiceModSend=0;
+function voiceParams(t,T){ const adsr=t.envMode==="adsr";
+  return {engine:+t.voice.slice(2), harmonics:eff(t,"harm",T), timbre:eff(t,"timb",T), morph:eff(t,"morph",T),
+    decay:adsr?0.95:eff(t,"mdecay",T), colour:eff(t,"colour",T), hold:adsr}; }
 function applyContinuousMods(){
   const n=ctx.currentTime;
   tracks.forEach(t=>{
     if(modded(t,"res")) t.filter.Q.setTargetAtTime(resQ(eff(t,"res",n)),n,0.04);
     if(modded(t,"cutoff") && t.fenv===0 && !modded(t,"fenv")) t.filter.frequency.setTargetAtTime(cutoffHz(eff(t,"cutoff",n)),n,0.04);
   });
+  // voice controls are sent to the sound engine, so held and ringing notes keep moving between notes too
+  if(macroState==="ready" && n-lastVoiceModSend>0.05){ lastVoiceModSend=n;
+    tracks.forEach((t,ti)=>{ if(!VOICE_MOD_KEYS.some(k=>modded(t,k))) return;
+      const p=voiceParams(t,n); [ti,ti+4].forEach(v=>macroNode.port.postMessage({type:"set",v,time:n,...p})); });
+  }
 }
 
 /* ---- per-note envelopes ---- */
@@ -540,8 +563,7 @@ function schedule(){
           triggerEnvelopes(t,time,gateDur);
           if(macroState==="ready"){
             const v=ti+(t.tails==="ring"?(t.alt^=1)*4:0);
-            macroNode.port.postMessage({type:"trig",v,time,note:m+pitchComp,engine:+t.voice.slice(2),
-              harmonics:t.harm,timbre:t.timb,morph:t.morph,decay:t.envMode==="adsr"?0.95:t.mdecay,colour:t.colour,hold:t.envMode==="adsr"});
+            macroNode.port.postMessage({type:"trig",v,time,note:m+pitchComp,...voiceParams(t,time)});
           }
         }
       }
@@ -616,7 +638,8 @@ function slider(obj,key,label,min,max,step,fmt,onchange){
 }
 function choice(obj,key,label,options,onchange){ // options: [[value,label],...]
   const id="ch"+(uid++), w=document.createElement("div"); w.className="ctl";
-  w.innerHTML=`<label class="label" for="${id}">${label}</label><select id="${id}">${options.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select>`;
+  const opt=([v,l])=>`<option value="${v}">${l}</option>`;   // an option can also be {group, items} for a labelled group
+  w.innerHTML=`<label class="label" for="${id}">${label}</label><select id="${id}">${options.map(o=>o.group?`<optgroup label="${o.group}">${o.items.map(opt).join("")}</optgroup>`:opt(o)).join("")}</select>`;
   const s=w.querySelector("select"); s.value=String(obj[key]);
   s.addEventListener("change",()=>{blendHold(obj,key); obj[key]=isNaN(+s.value)?s.value:+s.value; onchange&&onchange(); applyParams();});
   LIVE.push({el:w,refresh:()=>{s.value=String(obj[key]);}});
@@ -931,7 +954,7 @@ function openOrbitMenu(i){
 const INFO={
   "Pattern":"Rhythm: Rotate shifts where the pattern starts (watch the orbit turn as you drag it), Hits is how many notes are spread evenly around the orbit, Steps is its length, Chance lets hits sometimes drop out, and Swing delays every other step for a looser feel. Notes: New melody picks fresh notes for this orbit, and Melody lock keeps repeating the current ones. Movement: Random can jump anywhere in the range, Walk moves a step or two from the last note. Root pull snaps some notes to the root. Octave and Range set where notes can fall. Tip: press and hold an orbit for copy, paste, swap, solo and randomise.",
   "Sound":"Voice type picks the sound; every type comes from open-source Eurorack DSP code. The first three controls are the module's harmonics, timbre and morph knobs, renamed for what they do on each type. Gate colour sets how much notes darken as they fade, and Decay how long they ring; struck types (strings, resonators, drums and six-op FM) shape their own fade, so these two are hidden for them. The filter then shapes the tone: Cutoff sets its frequency and Resonance emphasises it. Envelope amount sweeps the cutoff up (+) or down (−) on each note, settling back over the envelope decay time.",
-  "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: two slow movers per orbit. Target picks the setting, Shape the movement (Random jumps, Drift glides), Rate the speed, and Depth how far it moves (negative moves the other way).",
+  "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: two slow movers per orbit. Target picks the setting: any voice control (named for the current voice type), the filter, or the amp envelope. Voice controls keep moving while a note holds, and envelope settings change from one note to the next. Shape the movement (Random jumps, Drift glides), Rate the speed, and Depth how far it moves (negative moves the other way).",
   "Mix":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right.",
   "Delay":"Every orbit feeds this delay through its Delay send (Mix tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
@@ -948,7 +971,7 @@ const MAIN_INFO=[
   "Press and hold an orbit (or right-click it on a computer) for its menu. Copy and Paste move all of an orbit's settings (except Mute) to another orbit, even after loading a different session. Swap with… exchanges two orbits, and Solo lets you hear one on its own. Randomise gives the orbit a new rhythm, sound, movement or everything, within ranges that suit ambient music, and Nudge gently moves its settings a little. Reset gives a plain starting sound, and Undo takes back the last change made from the menu.",
   "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
   "The [i] button on each page explains its controls.",
-  "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by the amazing Emilie Gillet (see [credits] at bottom of page).",
+  "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by Emilie Gillet (see [credits] at bottom of page).",
   "This project is still in active development.",
   "Comments or suggestions? [feedback]"];
 
@@ -1058,7 +1081,7 @@ function renderVoice(t){
     t.mods.forEach((m,i)=>{
       const box=document.createElement("div"); box.className="modslot full";
       const grid=pageGrid(
-        full(choice(m,"target",`Mod ${i+1} target`,MOD_TARGETS.map(([v,l])=>[v,l]),rerender)),
+        full(choice(m,"target",`Mod ${i+1} target`,modTargetOptions(t,m.target),rerender)),
         full(seg(m,"shape","Shape",[["sine","Sine"],["triangle","Triangle"],["random","Random"],["drift","Drift"]])),
         slider(m,"rate","Rate",0,1,0.005,r=>{const h=modHz(r); return h<1?(1/h).toFixed(1)+" s cycle":h.toFixed(2)+" Hz";}),
         slider(m,"depth","Depth",-1,1,0.01,v=>(v>0?"+":"")+Math.round(v*100)+"%"));
@@ -1079,8 +1102,8 @@ function panelHead(title,sub,acc){
   head.innerHTML=`<span class="tname">${title}</span>${sub?`<span class="note">${sub}</span>`:""}`;
   panel.append(head); return head;
 }
-const PREF={theme:"light"};
-// Light is the default. Only a theme the viewer picks themselves is remembered.
+const PREF={theme:"dark"};
+// Dark is the default. Only a theme the viewer picks themselves is remembered.
 try{ const th=localStorage.getItem("default-ambience-theme-choice"); if(th) PREF.theme=th; }catch(e){}
 function applyTheme(){
   document.documentElement.dataset.app=PREF.theme;
