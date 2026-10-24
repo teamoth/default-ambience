@@ -86,10 +86,15 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
   padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .modal[hidden]{display:none}
 .ring{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
-.omenu{position:fixed;z-index:25;box-sizing:border-box;width:190px;background:var(--panel);border:2px solid var(--acc);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 24px color-mix(in srgb,#000 30%,transparent)}
+.omenu{position:fixed;z-index:25;box-sizing:border-box;width:230px;max-height:calc(100vh - 20px);overflow:auto;background:var(--panel);border:2px solid var(--acc);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 24px color-mix(in srgb,#000 30%,transparent)}
 .omenu[hidden]{display:none}
 .omenu .ohead{font-size:var(--fs-ui);font-weight:600;padding:2px 4px}
-.omenu .btn{width:100%}
+.omenu .btn{width:100%;padding-left:4px;padding-right:4px}
+.omenu .orow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.omenu .osub{font-size:calc(var(--fs-ui)*.9);opacity:.7;padding:4px 4px 0}
+.omenu .btn[aria-pressed="true"]{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.ring.soloout canvas{opacity:.3}
+.ring.swapsrc{outline:2px dashed var(--acc);outline-offset:-2px}
 .omenu .btn:disabled{opacity:.4}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:30;background:var(--fg);color:var(--bg);font-size:var(--fs-ui);padding:8px 14px;border-radius:999px;pointer-events:none;opacity:0;transition:opacity .2s}
 .toast.show{opacity:1}
@@ -241,7 +246,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.11";
+const APP_VERSION="1.12";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -517,6 +522,7 @@ function triggerEnvelopes(t,time,gateDur){
   }
 }
 /* ================= scheduler ================= */
+let soloIdx=-1;   // -1 = no solo; otherwise only that orbit plays (not saved with sessions)
 let playing=false, tick=0, nextTime=0, timer=null; const visQ=[];
 function schedule(){
   applyContinuousMods();
@@ -529,7 +535,7 @@ function schedule(){
       if(pat[pos]){
         let d;
         if(t.lock && t.notes[pos]!=null) d=t.notes[pos]; else { d=nextDegree(t); t.notes[pos]=d; }
-        if(!t.mute && Math.random()*100<t.prob){
+        if(!t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
           const m=degreeToMidi(t,d), gateDur=t.gate*stepDur; name=mname(m);
           triggerEnvelopes(t,time,gateDur);
           if(macroState==="ready"){
@@ -777,7 +783,9 @@ tracks.forEach((t,ti)=>{
   const r=document.createElement("button"); r.className="ring"; r.setAttribute("role","tab");
   r.style.setProperty("--acc",`var(${t.color})`);
   r.setAttribute("aria-label","Orbit "+t.name); r.innerHTML=`<canvas width="320" height="320" aria-hidden="true"></canvas><span class="note"><span class="nn">–</span></span>`;
-  r.onclick=()=>{ if(r.dataset.held){ delete r.dataset.held; return; } selectTab(ti); };
+  r.onclick=()=>{ if(r.dataset.held){ delete r.dataset.held; return; }
+    if(swapFrom!==null){ const f=swapFrom; endSwap(); if(f!==ti) swapOrbits(f,ti); return; }
+    selectTab(ti); };
   // press and hold (or right-click) for the copy / paste menu.
   // Touch uses touch events (they keep arriving even when the browser takes over the gesture),
   // and the phone's own long-press signal (contextmenu) opens it too, whichever comes first.
@@ -803,47 +811,125 @@ function selectTab(s){
   if(s==="global") renderGlobal(); else if(s==="master") renderMaster(); else if(s==="sessions") renderSessions(); else renderVoice(tracks[s]);
   updateDials();
 }
-/* ---- copy one orbit's settings onto another ---- */
+/* ---- the orbit menu: press and hold an orbit ----
+   Copy / paste, swap, solo, randomise, gentle nudge, reset, and undo of the last change made here. */
 const ORBIT_COPY_SKIP=["mute"];     // muting is part of playing, not of the orbit's setup
 let orbitClip=null;                  // kept in memory, so it survives loading another session
+let orbitUndo=null;                  // {label, saved:[[index, settings], ...]}
+let swapFrom=null;
 let toastTimer=null;
 function toast(msg){
   let el=document.getElementById("toast");
   if(!el){ el=document.createElement("div"); el.id="toast"; el.className="toast"; el.setAttribute("role","status"); document.body.append(el); }
-  el.textContent=msg; el.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove("show"),1800);
+  el.textContent=msg; el.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove("show"),2200);
 }
-function copyOrbit(i){ const t=tracks[i];
-  orbitClip={from:i, data:Object.fromEntries(TKEYS.filter(k=>!ORBIT_COPY_SKIP.includes(k)).map(k=>[k,clone(t[k])]))};
-  toast("Orbit "+(i+1)+" copied"); }
-function pasteOrbit(i){ if(!orbitClip) return; const t=tracks[i];
-  Object.entries(orbitClip.data).forEach(([k,v])=>{ blendHold(t,k); t[k]=clone(v); });
-  if(BLEND.active) for(let j=0;j<2;j++) ["target","shape","rate","depth","seed"].forEach(k=>BLEND.held.add("T"+i+".m"+j+"."+k));
-  if(!Array.isArray(t.mods)||t.mods.length<2) t.mods=[newMod(),newMod()];
-  t.last=0; t.nnEl.textContent="\u2013";
-  applyParams(); updateDials(); if(sel===i) selectTab(i);
-  toast("Pasted onto orbit "+(i+1)); }
+const orbitData=(i,skip=[])=>Object.fromEntries(TKEYS.filter(k=>!skip.includes(k)).map(k=>[k,clone(tracks[i][k])]));
+function setOrbit(i,data){ const t=tracks[i]; Object.entries(data).forEach(([k,v])=>{ t[k]=clone(v); }); }
+function remember(label,...idx){ orbitUndo={label, saved:idx.map(i=>[i,orbitData(i)])}; }
+function orbitChanged(...idx){
+  idx.forEach(i=>{ const t=tracks[i];
+    if(!Array.isArray(t.mods)||t.mods.length<2) t.mods=[newMod(),newMod()];
+    t.steps=Math.max(2,Math.min(32,Math.round(t.steps))); t.hits=Math.max(0,Math.min(t.steps,Math.round(t.hits)));
+    t.rot=Math.max(0,Math.min(t.steps-1,Math.round(t.rot)));
+    if(BLEND.active){ TKEYS.forEach(k=>BLEND.held.add("T"+i+"."+k));
+      for(let j=0;j<2;j++) ["target","shape","rate","depth","seed"].forEach(k=>BLEND.held.add("T"+i+".m"+j+"."+k)); }
+    t.last=0; t.nnEl.textContent="–"; t.ringEl.classList.toggle("muted",!!t.mute); });
+  applyParams(); updateDials(); if(idx.includes(sel)) selectTab(sel);
+}
+function copyOrbit(i){ orbitClip={from:i, data:orbitData(i,ORBIT_COPY_SKIP)}; toast("Orbit "+(i+1)+" copied"); }
+function pasteOrbit(i){ if(!orbitClip) return; remember("paste",i); setOrbit(i,orbitClip.data); orbitChanged(i); toast("Pasted onto orbit "+(i+1)); }
+function swapOrbits(a,b){ remember("swap",a,b); const da=orbitData(a), db=orbitData(b); setOrbit(a,db); setOrbit(b,da); orbitChanged(a,b);
+  if(soloIdx===a) soloIdx=b; else if(soloIdx===b) soloIdx=a; updateSolo(); toast("Orbits "+(a+1)+" and "+(b+1)+" swapped"); }
+function startSwap(i){ swapFrom=i; tracks[i].ringEl.classList.add("swapsrc"); toast("Tap the orbit to swap with"); }
+function endSwap(){ if(swapFrom!==null) tracks[swapFrom].ringEl.classList.remove("swapsrc"); swapFrom=null; }
+function updateSolo(){ tracks.forEach((t,i)=>t.ringEl.classList.toggle("soloout",soloIdx>=0&&soloIdx!==i)); }
+function toggleSolo(i){ soloIdx=soloIdx===i?-1:i; updateSolo(); toast(soloIdx<0?"Solo off":"Only orbit "+(i+1)+" is playing"); }
+function undoOrbit(){ if(!orbitUndo) return; const u=orbitUndo; orbitUndo=null;
+  u.saved.forEach(([i,d])=>setOrbit(i,d)); orbitChanged(...u.saved.map(([i])=>i)); toast("Undone"); }
+
+/* randomising keeps to ranges that sound good: no inaudible filters, no volume jumps */
+const R=(a,b)=>a+Math.random()*(b-a), RI=(a,b)=>Math.floor(R(a,b+1)), pick=a=>a[Math.floor(Math.random()*a.length)];
+const chance=p=>Math.random()<p;
+const AMBIENT_VOICES=MACRO.map(([i])=>i).filter(i=>i<21);   // leave out the drum types
+function rollRhythm(t){
+  t.steps=pick([5,6,7,8,9,10,11,12,13,14,15,16,16,16]);
+  t.hits=RI(1,Math.max(1,Math.round(t.steps*0.45))); t.rot=RI(0,t.steps-1);
+  t.prob=chance(0.5)?100:RI(45,95); t.swing=chance(0.7)?0:RI(5,30); t.notes=[];
+}
+function rollNotes(t){
+  t.mode=chance(0.6)?"walk":"random"; t.pull=RI(10,70); t.oct=RI(2,5); t.span=chance(0.7)?1:2; t.notes=[];
+}
+function rollSound(t){
+  t.voice="m:"+pick(AMBIENT_VOICES);
+  t.harm=R(0.05,0.8); t.timb=R(0.05,0.8); t.morph=R(0.05,0.8); t.colour=R(0.1,0.6); t.mdecay=R(0.35,0.9);
+  t.ftype=chance(0.8)?"lowpass":pick(["bandpass","highpass"]);
+  t.cutoff=t.ftype==="lowpass"?R(0.35,0.85):t.ftype==="bandpass"?R(0.3,0.7):R(0.05,0.35);
+  t.res=R(0,0.45); t.fenv=chance(0.5)?0:R(-0.3,0.5); t.fdec=R(0.1,1.5);
+  t.envMode=chance(0.7)?"adsr":"natural";
+  t.A=Math.exp(R(Math.log(0.01),Math.log(4))); t.D=R(0.2,3); t.S=R(0.4,0.9); t.R=R(0.5,6);
+  t.gate=pick([1,2,3,4,6,8,10,12]); t.tails=chance(0.4)?"ring":"cut";
+}
+function rollMovement(t){
+  t.mods=[0,1].map(()=>chance(0.3)?newMod():{target:pick(MOD_TARGETS.slice(1))[0], shape:pick(["sine","triangle","random","drift"]),
+    rate:R(0.05,0.5), depth:(chance(0.5)?1:-1)*R(0.15,0.6), seed:Math.random()*100});
+}
+function rollMix(t){ t.pan=R(-0.6,0.6); t.dSend=R(0,0.6); t.rSend=R(0.3,1); }
+function nudge(t){
+  const step=(k,lo,hi,amt)=>{ t[k]=Math.max(lo,Math.min(hi,t[k]+R(-amt,amt)*(hi-lo))); };
+  ["harm","timb","morph","colour","mdecay"].forEach(k=>step(k,0,1,0.08));
+  step("cutoff",0.2,1,0.06); step("res",0,0.7,0.06); step("fenv",-1,1,0.06); step("pan",-1,1,0.08);
+  step("A",0.001,4,0.04); step("D",0.01,4,0.04); step("S",0,1,0.06); step("R",0.01,8,0.04);
+  t.mods.forEach(m=>{ if(m.target!=="off"){ m.rate=Math.max(0,Math.min(1,m.rate+R(-0.05,0.05))); m.depth=Math.max(-1,Math.min(1,m.depth+R(-0.1,0.1))); } });
+  if(chance(0.4)) t.rot=(t.rot+pick([-1,1])+t.steps)%t.steps;
+  if(chance(0.25)) t.hits=Math.max(1,Math.min(t.steps,t.hits+pick([-1,1])));
+}
+const ROLLS={
+  rhythm:["randomise rhythm",t=>rollRhythm(t)], sound:["randomise sound",t=>rollSound(t)],
+  movement:["randomise movement",t=>rollMovement(t)],
+  all:["randomise everything",t=>{rollRhythm(t);rollNotes(t);rollSound(t);rollMovement(t);rollMix(t);}],
+  nudge:["nudge",t=>nudge(t)],
+  reset:["reset",t=>{ Object.assign(t,clone(base),{steps:16,hits:4,rot:0,voice:"m:8",oct:3,span:1,vol:0.6,lock:false,notes:[],mods:[newMod(),newMod()]}); }],
+};
+function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(tracks[i]); orbitChanged(i);
+  const done={rhythm:"new rhythm",sound:"new sound",movement:"new movement",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
+  toast("Orbit "+(i+1)+": "+done+". Hold it to undo."); }
+
 function closeOrbitMenu(){ const m=document.getElementById("omenu"); if(m) m.hidden=true; document.removeEventListener("pointerdown",outsideMenu,true); }
 function outsideMenu(e){ const m=document.getElementById("omenu"); if(m&&!m.contains(e.target)) closeOrbitMenu(); }
 function openOrbitMenu(i){
+  endSwap();
   let m=document.getElementById("omenu");
   if(!m){ m=document.createElement("div"); m.id="omenu"; m.className="omenu"; m.setAttribute("role","menu"); document.body.append(m);
-    document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeOrbitMenu(); }); }
+    document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeOrbitMenu(); endSwap(); } }); }
   m.innerHTML=""; m.style.setProperty("--acc",`var(${tracks[i].color})`);
-  const head=document.createElement("div"); head.className="ohead"; head.textContent="Orbit "+(i+1);
-  const item=(txt,fn,dis)=>{ const b=document.createElement("button"); b.className="btn"; b.setAttribute("role","menuitem"); b.textContent=txt; b.disabled=!!dis; b.onclick=()=>{ closeOrbitMenu(); fn&&fn(); }; return b; };
+  const div=(cls,txt)=>{ const d=document.createElement("div"); d.className=cls; if(txt) d.textContent=txt; return d; };
+  const item=(txt,fn,dis,label)=>{ const b=document.createElement("button"); b.className="btn"; b.setAttribute("role","menuitem"); b.textContent=txt;
+    if(label) b.setAttribute("aria-label",label); b.disabled=!!dis; b.onclick=()=>{ closeOrbitMenu(); fn&&fn(); }; return b; };
+  const row=(...els)=>{ const r=div("orow"); r.append(...els); return r; };
   const canPaste=orbitClip&&orbitClip.from!==i;
-  m.append(head, item("Copy settings",()=>copyOrbit(i)),
-    item(orbitClip?(orbitClip.from===i?"Paste (copied from here)":"Paste orbit "+(orbitClip.from+1)+"\u2019s settings"):"Paste (copy an orbit first)",()=>pasteOrbit(i),!canPaste),
+  const solo=item(soloIdx===i?"End solo":"Solo",()=>toggleSolo(i)); solo.setAttribute("aria-pressed",soloIdx===i);
+  m.append(div("ohead","Orbit "+(i+1)),
+    row(item("Copy",()=>copyOrbit(i),false,"Copy settings"),
+        item(canPaste?"Paste "+(orbitClip.from+1):"Paste",()=>pasteOrbit(i),!canPaste,canPaste?"Paste orbit "+(orbitClip.from+1)+"'s settings":"Paste (copy an orbit first)")),
+    row(item("Swap with…",()=>startSwap(i)), solo),
+    div("osub","Randomise"),
+    row(item("Rhythm",()=>rollOrbit(i,"rhythm"),false,"Randomise rhythm"), item("Sound",()=>rollOrbit(i,"sound"),false,"Randomise sound")),
+    row(item("Movement",()=>rollOrbit(i,"movement"),false,"Randomise movement"), item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything")),
+    item("Nudge gently",()=>rollOrbit(i,"nudge")),
+    div("osub",""),
+    row(item("Reset",()=>rollOrbit(i,"reset"),false,"Reset to a plain sound"),
+        item("Undo",undoOrbit,!orbitUndo,orbitUndo?"Undo "+orbitUndo.label:"Nothing to undo")),
     item("Cancel"));
   m.hidden=false;
-  const rr=tracks[i].ringEl.getBoundingClientRect(), w=190, vw=document.documentElement.clientWidth;
+  const rr=tracks[i].ringEl.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight,
+        vw=document.documentElement.clientWidth, vh=window.innerHeight;
   m.style.left=Math.max(16,Math.min(vw-w-16,rr.left+rr.width/2-w/2))+"px";
-  m.style.top=(rr.bottom+6)+"px";
+  m.style.top=Math.max(10,Math.min(vh-h-10,rr.bottom+6))+"px";
   if(navigator.vibrate) try{ navigator.vibrate(15); }catch(e){}
   setTimeout(()=>document.addEventListener("pointerdown",outsideMenu,true),0);
 }
 const INFO={
-  "Pattern":"Rhythm: Rotate shifts where the pattern starts (watch the orbit turn as you drag it), Hits is how many notes are spread evenly around the orbit, Steps is its length, Chance lets hits sometimes drop out, and Swing delays every other step for a looser feel. Notes: New melody picks fresh notes for this orbit, and Melody lock keeps repeating the current ones. Movement: Random can jump anywhere in the range, Walk moves a step or two from the last note. Root pull snaps some notes to the root. Octave and Range set where notes can fall. Tip: press and hold an orbit to copy its settings and paste them onto another.",
+  "Pattern":"Rhythm: Rotate shifts where the pattern starts (watch the orbit turn as you drag it), Hits is how many notes are spread evenly around the orbit, Steps is its length, Chance lets hits sometimes drop out, and Swing delays every other step for a looser feel. Notes: New melody picks fresh notes for this orbit, and Melody lock keeps repeating the current ones. Movement: Random can jump anywhere in the range, Walk moves a step or two from the last note. Root pull snaps some notes to the root. Octave and Range set where notes can fall. Tip: press and hold an orbit for copy, paste, swap, solo and randomise.",
   "Sound":"Voice type picks the sound; every type comes from open-source Eurorack DSP code. The first three controls are the module's harmonics, timbre and morph knobs, renamed for what they do on each type. Gate colour sets how much notes darken as they fade, and Decay how long they ring; struck types (strings, resonators, drums and six-op FM) shape their own fade, so these two are hidden for them. The filter then shapes the tone: Cutoff sets its frequency and Resonance emphasises it. Envelope amount sweeps the cutoff up (+) or down (−) on each note, settling back over the envelope decay time.",
   "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: two slow movers per orbit. Target picks the setting, Shape the movement (Random jumps, Drift glides), Rate the speed, and Depth how far it moves (negative moves the other way).",
   "Mix":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right.",
@@ -859,7 +945,7 @@ const MAIN_INFO=[
   "Each of the 4 circular 'orbits' is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (rhythm and notes), Sound (voice and filter), Motion (envelope and modulation) and Mix.",
-  "Press and hold an orbit (or right-click it on a computer) to copy all of its settings, then press and hold another orbit to paste them there. The copy is kept when you load another session, so you can bring an orbit across from one session to another.",
+  "Press and hold an orbit (or right-click it on a computer) for its menu. Copy and Paste move all of an orbit's settings (except Mute) to another orbit, even after loading a different session. Swap with… exchanges two orbits, and Solo lets you hear one on its own. Randomise gives the orbit a new rhythm, sound, movement or everything, within ranges that suit ambient music, and Nudge gently moves its settings a little. Reset gives a plain starting sound, and Undo takes back the last change made from the menu.",
   "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
   "The [i] button on each page explains its controls.",
   "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by the amazing Emilie Gillet (see [credits] at bottom of page).",
