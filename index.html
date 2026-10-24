@@ -241,7 +241,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.10";
+const APP_VERSION="1.11";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -778,14 +778,21 @@ tracks.forEach((t,ti)=>{
   r.style.setProperty("--acc",`var(${t.color})`);
   r.setAttribute("aria-label","Orbit "+t.name); r.innerHTML=`<canvas width="320" height="320" aria-hidden="true"></canvas><span class="note"><span class="nn">–</span></span>`;
   r.onclick=()=>{ if(r.dataset.held){ delete r.dataset.held; return; } selectTab(ti); };
-  // press and hold (or right-click) for the copy / paste menu
+  // press and hold (or right-click) for the copy / paste menu.
+  // Touch uses touch events (they keep arriving even when the browser takes over the gesture),
+  // and the phone's own long-press signal (contextmenu) opens it too, whichever comes first.
   let timer=null, x0=0, y0=0;
   const cancel=()=>{ clearTimeout(timer); timer=null; };
-  r.addEventListener("pointerdown",e=>{ if(e.button>0) return; delete r.dataset.held; x0=e.clientX; y0=e.clientY; cancel();
-    timer=setTimeout(()=>{ timer=null; r.dataset.held="1"; openOrbitMenu(ti); },500); });
-  r.addEventListener("pointermove",e=>{ if(timer&&Math.hypot(e.clientX-x0,e.clientY-y0)>10) cancel(); });
-  ["pointerup","pointercancel","pointerleave"].forEach(ev=>r.addEventListener(ev,cancel));
-  r.addEventListener("contextmenu",e=>{ e.preventDefault(); cancel(); if(!r.dataset.held&&e.pointerType!=="touch") openOrbitMenu(ti); });
+  const hold=()=>{ timer=null; if(r.dataset.held) return; r.dataset.held="1"; openOrbitMenu(ti); };
+  const start=(x,y)=>{ delete r.dataset.held; x0=x; y0=y; cancel(); timer=setTimeout(hold,450); };
+  const move=(x,y)=>{ if(timer&&Math.hypot(x-x0,y-y0)>12) cancel(); };
+  r.addEventListener("touchstart",e=>{ const p=e.touches[0]; start(p.clientX,p.clientY); },{passive:true});
+  r.addEventListener("touchmove",e=>{ const p=e.touches[0]; move(p.clientX,p.clientY); },{passive:true});
+  r.addEventListener("touchend",cancel); r.addEventListener("touchcancel",cancel);
+  r.addEventListener("mousedown",e=>{ if(e.button===0&&!e.sourceCapabilities?.firesTouchEvents) start(e.clientX,e.clientY); });
+  r.addEventListener("mousemove",e=>move(e.clientX,e.clientY));
+  r.addEventListener("mouseup",cancel); r.addEventListener("mouseleave",cancel);
+  r.addEventListener("contextmenu",e=>{ e.preventDefault(); cancel(); hold(); });
   t.ringEl=r; t.canvas=r.querySelector("canvas"); t.nnEl=r.querySelector(".nn");
   ringsEl.append(r);
 });
