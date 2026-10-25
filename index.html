@@ -63,8 +63,7 @@ button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid va
 .ctl .top .label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ctl .val{display:flex;align-items:center;gap:6px;flex:none}
 .ctl .top:has(.val){align-items:center}
-.ctl .val output{min-width:6.5ch;text-align:center;line-height:1}
-.vhead .val output{min-width:4.5ch}
+.ctl .val output{text-align:center;line-height:1}
 @media (max-width:370px){ .vhead .val{gap:3px} .vhead .nb{width:26px} .vhead .btn{padding-left:8px;padding-right:8px} .vhead{gap:6px} }
 .nb{font:inherit;font-size:.95rem;line-height:1;width:30px;height:26px;padding:0;border-radius:7px;border:1px solid var(--line);
   background:var(--raise);color:var(--fg);cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
@@ -190,6 +189,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .nudge{flex:none;width:38px;padding:0;font-size:1rem;touch-action:manipulation}
 .modslot{padding:4px 0 8px}
 .secthead{font-size:var(--fs-ui);font-weight:600;color:var(--acc);padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}
+.secthead.withi{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.secthead.withi .info{flex:none}
 .page>.secthead:first-child{border-top:none;padding-top:0;margin-top:0}
 .dim{opacity:.45}
 
@@ -259,7 +260,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.24";
+const APP_VERSION="1.25";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -786,7 +787,13 @@ function slider(obj,key,label,min,max,step,fmt,onchange){
     if(e.key==="Home"){e.preventDefault(); setV(min);} if(e.key==="End"){e.preventDefault(); setV(max);}});
   if(!plain){
     // one nudge: a single step, or 1% of the range when the steps are very fine
-    const n=(max-min)/step>100?Math.max(step,Math.round((max-min)/100/step)*step):step;
+    // whole-number controls (tempo, steps, velocity…) move by 1; very fine ones by 1% of the range
+    const n=step>=1||(max-min)/step<=100?step:Math.max(step,Math.round((max-min)/100/step)*step);
+    // reserve room for the widest value this control can show, so − and + never move
+    let widest=0; const count=Math.round((max-min)/step), every=Math.max(1,Math.floor(count/400));
+    for(let i=0;i<=count;i+=every){ try{ widest=Math.max(widest,String(fmt(+(min+i*step).toFixed(4))).length); }catch(e){} }
+    try{ widest=Math.max(widest,String(fmt(max)).length); }catch(e){}
+    out.style.minWidth=widest+"ch";
     w.querySelectorAll(".nb").forEach((b,i)=>{
       const d=i?n:-n; let hold=null, rep=null;
       const go=()=>setV(obj[key]+d), stop=()=>{ clearTimeout(hold); clearInterval(rep); };
@@ -1335,14 +1342,16 @@ function renderVoice(t){
       box.append(grid); page.append(box);
     });
   } else {
-    page=pageGrid(slider(t,"dSend","Delay send",0,1,0.01,pct), slider(t,"rSend","Reverb send",0,1,0.01,pct),
+    page=pageGrid(sect("Sends"),slider(t,"dSend","Delay send",0,1,0.01,pct), slider(t,"rSend","Reverb send",0,1,0.01,pct),
       full(slider(t,"pan","Pan",-1,1,0.01,v=>v===0?"Centre":(v<0?"L ":"R ")+Math.round(Math.abs(v)*100))),
       sect("MIDI"),
       choice(t,"midi","Channel",[[0,"Off"],...Array.from({length:16},(_,i)=>[i+1,"Channel "+(i+1)])],()=>{ midiAllOff(); rerender(); }),
       seg(t,"local","Internal sound",[["on","On"],["off","Off"]]),
       t.midi&&!MIDI.out?hint("Pick a MIDI output in Global to send these notes."):null);
   }
-  const [vi,vbox]=infoToggle(voicePage); head.append(vi);
+  const [vi,vbox]=infoToggle(voicePage);
+  const firstHead=page.querySelector(".secthead");   // the i sits at the end of the page's first heading, clear of Level's + button
+  if(firstHead){ firstHead.classList.add("withi"); firstHead.append(vi); } else head.append(vi);
   panel.append(head,nav,vbox,page);
 }
 
@@ -1367,19 +1376,7 @@ function chooseTheme(){
 applyTheme();
 function tempoControl(){
   const row=document.createElement("div"); row.className="tempo";
-  slider.plain=true;   // tempo has its own larger − and +
-  const sl=slider(G,"bpm","Tempo",10,500,1,v=>v+" bpm",updateDials);
-  const nudge=(d,lbl)=>{
-    const b=document.createElement("button"); b.className="btn nudge"; b.textContent=lbl; b.setAttribute("aria-label",(d<0?"Slower":"Faster")+" by 1 bpm");
-    let hold=null, rep=null;
-    const step=()=>{ sl.set(Math.min(500,Math.max(10,G.bpm+d))); updateDials(); applyParams(); };
-    const stopRep=()=>{ clearTimeout(hold); clearInterval(rep); };
-    b.addEventListener("pointerdown",e=>{ e.preventDefault(); step(); hold=setTimeout(()=>{ rep=setInterval(step,70); },400); });
-    ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,stopRep));
-    b.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); step(); } });
-    return b;
-  };
-  row.append(nudge(-1,"−"),sl,nudge(1,"+"));
+  row.append(slider(G,"bpm","Tempo",10,500,1,v=>v+" bpm",updateDials));
   return row;
 }
 function renderGlobal(){
