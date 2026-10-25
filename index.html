@@ -250,7 +250,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.20";
+const APP_VERSION="1.21";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -940,7 +940,7 @@ function restore(snap){
   Object.keys(FX).forEach(k=>{if(k in snap.FX) FX[k]=snap.FX[k];});
   if(!("orbits" in snap.G)) G.orbits=4;
   G.orbits=+G.orbits===8?8:4;
-  tracks.forEach((t,i)=>{ const st=snap.tracks[i]||{...clone(ORBIT_DEFAULTS[i]),mute:false,lock:false,notes:[]}; 
+  tracks.forEach((t,i)=>{ const st=snap.tracks[i]||{...clone(ORBIT_DEFAULTS[i]),hits:0,mute:false,lock:false,notes:[]};   // orbits a session didn't have start empty: a sound is ready, but no hits 
     TKEYS.forEach(k=>{if(k in st) t[k]=clone(st[k]);});
     if(!Array.isArray(t.mods)) t.mods=[]; while(t.mods.length<NMODS) t.mods.push(newMod());
     if(!("swing" in st)) t.swing=oldSwing||0;
@@ -1456,6 +1456,9 @@ function makePreset(g,fx,rings){
     tracks:rings.map(r=>({...base,steps:16,hits:4,rot:0,voice:"m:8",oct:3,span:1,vol:0.6,mute:false,lock:false,notes:[],
       ...r, mods:Array.from({length:NMODS},(_,i)=>({...newMod(),...((r.mods||[])[i]||{})}))}))};
 }
+// the Default Ambience preset includes the second row, so switching to 8 orbits there adds its four extra voices
+if(DEFAULT_SESSION.tracks.length<8) for(let i=DEFAULT_SESSION.tracks.length;i<8;i++){
+  const d=ORBIT_DEFAULTS[i]; DEFAULT_SESSION.tracks.push(Object.fromEntries(TKEYS.map(k=>[k,clone(k==="mods"?d.mods:k==="notes"?[]:d[k])]).filter(([,v])=>v!==undefined))); }
 const PRESETS=[
   {name:"Default Ambience", about:"Slow, soft and evolving", data:DEFAULT_SESSION},
   // a blank canvas: silent orbits with plain voices, ready for hits to be added
