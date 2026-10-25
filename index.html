@@ -151,7 +151,10 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1 1 100%}   /* Level gets its own full-width row under i and Mute */
-.vhead .btn{flex:none;min-width:64px}
+.vhead .btn{flex:none;min-width:56px}
+.vhead .btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center}
+.vhead .oname{margin-left:auto;font-weight:600;font-size:var(--fs-ui);color:var(--acc);white-space:nowrap}
+@media (max-width:370px){ .vhead{column-gap:8px} .vhead .btn{min-width:0;padding-left:10px;padding-right:10px} .vhead .btn.dice{width:38px} .vhead .ow{display:none} .vhead .oname{font-size:1rem} }
 .pages{display:flex;gap:6px;flex:1;min-width:0}
 .pages button{flex:1 1 0;min-width:max-content}
 .navrow{display:flex;align-items:center;gap:8px}
@@ -260,7 +263,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.27";
+const APP_VERSION="1.28";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -1123,7 +1126,8 @@ function swapOrbits(a,b){ remember("swap",a,b); const da=orbitData(a), db=orbitD
 function startSwap(i){ swapFrom=i; tracks[i].ringEl.classList.add("swapsrc"); toast("Tap the orbit to swap with"); }
 function endSwap(){ if(swapFrom!==null) tracks[swapFrom].ringEl.classList.remove("swapsrc"); swapFrom=null; }
 function updateSolo(){ tracks.forEach((t,i)=>t.ringEl.classList.toggle("soloout",soloIdx>=0&&soloIdx!==i)); }
-function toggleSolo(i){ soloIdx=soloIdx===i?-1:i; updateSolo(); toast(soloIdx<0?"Solo off":"Only orbit "+(i+1)+" is playing"); }
+function toggleSolo(i){ soloIdx=soloIdx===i?-1:i; updateSolo(); toast(soloIdx<0?"Solo off":"Only orbit "+(i+1)+" is playing");
+  const sb=document.getElementById("solobtn"); if(sb) sb.setAttribute("aria-pressed",soloIdx===sel); }
 function undoOrbit(){ if(!orbitUndo) return; const u=orbitUndo; orbitUndo=null;
   u.saved.forEach(([i,d])=>setOrbit(i,d)); orbitChanged(...u.saved.map(([i])=>i)); toast("Undone"); }
 
@@ -1176,7 +1180,7 @@ function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(
 
 function closeOrbitMenu(){ const m=document.getElementById("omenu"); if(m) m.hidden=true; document.removeEventListener("pointerdown",outsideMenu,true); }
 function outsideMenu(e){ const m=document.getElementById("omenu"); if(m&&!m.contains(e.target)) closeOrbitMenu(); }
-function openOrbitMenu(i){
+function openOrbitMenu(i,mode,anchor){
   endSwap();
   let m=document.getElementById("omenu");
   if(!m){ m=document.createElement("div"); m.id="omenu"; m.className="omenu"; m.setAttribute("role","menu"); document.body.append(m);
@@ -1188,7 +1192,13 @@ function openOrbitMenu(i){
   const row=(...els)=>{ const r=div("orow"); r.append(...els); return r; };
   const canPaste=orbitClip&&orbitClip.from!==i;
   const solo=item(soloIdx===i?"End solo":"Solo",()=>toggleSolo(i)); solo.setAttribute("aria-pressed",soloIdx===i);
-  m.append(div("ohead","Orbit "+(i+1)),
+  const randomRows=()=>[
+    row(item("Rhythm",()=>rollOrbit(i,"rhythm"),false,"Randomise rhythm"), item("Sound",()=>rollOrbit(i,"sound"),false,"Randomise sound")),
+    row(item("Movement",()=>rollOrbit(i,"movement"),false,"Randomise movement"), item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything")),
+    item("Nudge gently",()=>rollOrbit(i,"nudge"))];
+  if(mode==="random") m.append(div("ohead","Randomise orbit "+(i+1)),...randomRows(),div("osub",""),
+    row(item("Undo",undoOrbit,!orbitUndo,orbitUndo?"Undo "+orbitUndo.label:"Nothing to undo"),item("Cancel")));
+  else m.append(div("ohead","Orbit "+(i+1)),
     row(item("Copy",()=>copyOrbit(i),false,"Copy settings"),
         item(canPaste?"Paste "+(orbitClip.from+1):"Paste",()=>pasteOrbit(i),!canPaste,canPaste?"Paste orbit "+(orbitClip.from+1)+"'s settings":"Paste (copy an orbit first)")),
     row(item("Swap with…",()=>startSwap(i)), solo),
@@ -1201,7 +1211,7 @@ function openOrbitMenu(i){
         item("Undo",undoOrbit,!orbitUndo,orbitUndo?"Undo "+orbitUndo.label:"Nothing to undo")),
     item("Cancel"));
   m.hidden=false;
-  const rr=tracks[i].ringEl.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight,
+  const rr=(anchor||tracks[i].ringEl).getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight,
         vw=document.documentElement.clientWidth, vh=window.innerHeight;
   m.style.left=Math.max(16,Math.min(vw-w-16,rr.left+rr.width/2-w/2))+"px";
   m.style.top=Math.max(10,Math.min(vh-h-10,rr.bottom+6))+"px";
@@ -1225,7 +1235,7 @@ const MAIN_INFO=[
   "Each of the circular 'orbits' is a looping rhythm. There are 4 to start with; Global can switch to 8, in two rows. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (rhythm and notes), Sound (voice and filter), Motion (envelope and modulation) and Mix + MIDI (sends, pan and MIDI channel).",
-  "Press and hold an orbit (or right-click it on a computer) for its menu. Copy and Paste move all of an orbit's settings (except Mute) to another orbit, even after loading a different session. Swap with… exchanges two orbits, and Solo lets you hear one on its own. Randomise gives the orbit a new rhythm, sound, movement or everything, within ranges that suit ambient music, and Nudge gently moves its settings a little. Reset gives a plain starting sound, and Undo takes back the last change made from the menu.",
+  "Press and hold an orbit (or right-click it on a computer) for its menu. Copy and Paste move all of an orbit's settings (except Mute) to another orbit, even after loading a different session. Swap with… exchanges two orbits, and Solo lets you hear one on its own. Randomise gives the orbit a new rhythm, sound, movement or everything, within ranges that suit ambient music, and Nudge gently moves its settings a little. Reset gives a plain starting sound, and Undo takes back the last change made from the menu. Solo and the dice button (Randomise) are also at the top of each orbit's panel, next to Mute.",
   "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale, number of orbits (4 or 8) and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
   "The [i] button on each page explains its controls.",
   "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by Emilie Gillet (see [credits] at bottom of page).",
@@ -1278,7 +1288,14 @@ function renderVoice(t){
   const mute=mk("Mute","Silence this voice");
   mute.setAttribute("aria-pressed",t.mute);
   mute.onclick=()=>{blendHold(t,"mute"); t.mute=!t.mute; mute.setAttribute("aria-pressed",t.mute); t.ringEl.classList.toggle("muted",t.mute);};
-  head.append(mute,slider(t,"vol","Level",0,1,0.01,pct));
+  const ti=tracks.indexOf(t);
+  const solo=mk("Solo","Hear only this orbit"); solo.id="solobtn"; solo.setAttribute("aria-pressed",soloIdx===ti);
+  solo.onclick=()=>toggleSolo(ti);
+  const dice=mk("","Randomise this orbit"); dice.classList.add("dice"); dice.setAttribute("aria-label","Randomise");
+  dice.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/></svg>';
+  dice.onclick=()=>openOrbitMenu(ti,"random",dice);
+  const oname=document.createElement("span"); oname.className="oname"; oname.innerHTML=`<span class="ow">Orbit </span>${ti+1}`; oname.setAttribute("aria-label","Orbit "+(ti+1));
+  head.append(mute,solo,dice,oname,slider(t,"vol","Level",0,1,0.01,pct));
 
   const pages=["Pattern","Sound","Motion","Mix + MIDI"];
   if(!pages.includes(voicePage)) voicePage=pages[0];
