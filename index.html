@@ -64,7 +64,7 @@ button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid va
 .ctl .val{display:flex;align-items:center;gap:6px;flex:none}
 .ctl .top:has(.val){align-items:center}
 .ctl .val output{text-align:center;line-height:1}
-@media (max-width:370px){ .vhead .val{gap:3px} .vhead .nb{width:26px} .vhead .btn{padding-left:8px;padding-right:8px} .vhead{gap:6px} }
+
 .nb{font:inherit;font-size:.95rem;line-height:1;width:30px;height:26px;padding:0;border-radius:7px;border:1px solid var(--line);
   background:var(--raise);color:var(--fg);cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .nb:active{border-color:var(--acc,var(--t1))}
@@ -148,9 +148,9 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .phead .tname{font-size:1rem}
 .btns{display:flex;gap:6px;flex-wrap:wrap}
 .levelrow{padding-bottom:10px;border-bottom:1px solid var(--line)}
-.vhead{display:flex;align-items:center;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.vhead{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .vhead .tname{font-size:1rem;flex:none}
-.vhead .ctl{flex:1}
+.vhead .ctl{flex:1 1 100%}   /* Level gets its own full-width row under i and Mute */
 .vhead .btn{flex:none;min-width:64px}
 .pages{display:flex;gap:6px;flex:1;min-width:0}
 .pages button{flex:1 1 0;min-width:max-content}
@@ -260,7 +260,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.26";
+const APP_VERSION="1.27";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -755,11 +755,10 @@ document.getElementById("play").addEventListener("click",()=>playing?stop():star
 let uid=0;
 // Slider that only moves on a sideways drag (relative, so a tap never jumps it) and lets vertical swipes scroll the page.
 // line up the − buttons on the open page: every value box takes the width of the widest one
-// (the orbit's Level, beside Mute, is left as it is)
 let alignQueued=false;
 function alignSoon(){ if(alignQueued) return; alignQueued=true;
   requestAnimationFrame(()=>{ alignQueued=false;
-    const outs=[...document.querySelectorAll("#panel .val output[data-w]")].filter(o=>!o.closest(".vhead"));
+    const outs=[...document.querySelectorAll("#panel .val output[data-w]")];
     const w=Math.max(0,...outs.map(o=>+o.dataset.w)); outs.forEach(o=>{ o.style.minWidth=w+"ch"; }); }); }
 // − and + beside the value nudge it by one small step (hold to keep going); slider.plain=true leaves them out
 function slider(obj,key,label,min,max,step,fmt,onchange){
@@ -1358,7 +1357,7 @@ function renderVoice(t){
       t.midi&&!MIDI.out?hint("Pick a MIDI output in Global to send these notes."):null);
   }
   const [vi,vbox]=infoToggle(voicePage);
-  head.prepend(vi);   // the i sits at the start of the row, before Mute, clear of Level's − and +
+  head.prepend(vi);   // top row: i and Mute; Level underneath, lined up with the page's other sliders
   panel.append(head,nav,vbox,page);
 }
 
