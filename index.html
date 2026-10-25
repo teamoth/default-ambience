@@ -144,7 +144,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1}
 .vhead .btn{flex:none;min-width:64px}
-.pages{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;flex:1;min-width:0}
+.pages{display:flex;gap:6px;flex:1;min-width:0}
+.pages button{flex:1 1 0;min-width:max-content}
 .navrow{display:flex;align-items:center;gap:8px}
 .phead .info{margin-left:auto}
 .info{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--muted);
@@ -161,6 +162,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
   border-radius:8px;min-height:var(--h-ctl);padding:4px 6px;cursor:pointer;white-space:nowrap}
 /* the open tab is outlined, so tabs read as navigation while filled buttons are settings */
 .pages button[aria-selected="true"]{background:var(--panel);color:var(--acc);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);font-weight:600}
+@media (max-width:370px){ .pages{gap:4px} .pages button{font-size:.76rem;padding-left:4px;padding-right:4px} }
 .page{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;min-width:0}
 .page .full{grid-column:1 / -1}
 .hint{color:var(--muted);font-size:var(--fs-ui);margin:0;max-width:60ch}
@@ -247,7 +249,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.16";
+const APP_VERSION="1.17";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -578,7 +580,7 @@ function triggerEnvelopes(t,time,gateDur){
 }
 /* ================= scheduler ================= */
 /* ================= MIDI out =================
-   Each orbit can send its notes on a MIDI channel (Mix tab), to the output picked in Global.
+   Each orbit can send its notes on a MIDI channel (Mix + MIDI tab), to the output picked in Global.
    Notes are timestamped to line up with the audio. Note-offs are kept here and sent a little ahead,
    so a repeated note never gets cut by the previous one's note-off, and Stop can end everything cleanly. */
 const MIDI={access:null, out:null, state:"off", error:"", pending:[]};   // pending: [{time, ch, note}]
@@ -1070,10 +1072,10 @@ const INFO={
   "Pattern":"Rhythm: Rotate shifts where the pattern starts (watch the orbit turn as you drag it), Hits is how many notes are spread evenly around the orbit, Steps is its length, Chance lets hits sometimes drop out, and Swing delays every other step for a looser feel. Notes: New melody picks fresh notes for this orbit, and Melody lock keeps repeating the current ones. Movement: Random can jump anywhere in the range, Walk moves a step or two from the last note. Root pull snaps some notes to the root. Octave and Range set where notes can fall. Tip: press and hold an orbit for copy, paste, swap, solo and randomise.",
   "Sound":"Voice type picks the sound; every type comes from open-source Eurorack DSP code. The first three controls are the module's harmonics, timbre and morph knobs, renamed for what they do on each type. Gate colour sets how much notes darken as they fade, and Decay how long they ring; struck types (strings, resonators, drums and six-op FM) shape their own fade, so these two are hidden for them. The filter then shapes the tone: Cutoff sets its frequency and Resonance emphasises it. Envelope amount sweeps the cutoff up (+) or down (−) on each note, settling back over the envelope decay time.",
   "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: two slow movers per orbit. Target picks the setting: any voice control (named for the current voice type), the filter, or the amp envelope. Voice controls keep moving while a note holds, and envelope settings change from one note to the next. Shape the movement (Random jumps, Drift glides), Rate the speed, and Depth how far it moves (negative moves the other way).",
-  "Mix":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right. MIDI channel sends this orbit's notes (with their gate length) to the MIDI output chosen in Global; turn Internal sound off to hear only the MIDI instrument. Mute silences both.",
-  "Delay":"Every orbit feeds this delay through its Delay send (Mix tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
-  "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
-  "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
+  "Mix + MIDI":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right. Channel sends this orbit's notes (with their gate length) to the MIDI output chosen in Global; turn Internal sound off to hear only the MIDI instrument. Mute silences both.",
+  "Delay":"Every orbit feeds this delay through its Delay send (Mix + MIDI tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
+  "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
+  "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix + MIDI tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
   "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
   "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
 };
@@ -1082,7 +1084,7 @@ const MAIN_INFO=[
   "Some info about what's going on here:",
   "Each of the circular 'orbits' is a looping rhythm. There are 4 to start with; Global can switch to 8, in two rows. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
-  "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (rhythm and notes), Sound (voice and filter), Motion (envelope and modulation) and Mix.",
+  "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (rhythm and notes), Sound (voice and filter), Motion (envelope and modulation) and Mix + MIDI (sends, pan and MIDI channel).",
   "Press and hold an orbit (or right-click it on a computer) for its menu. Copy and Paste move all of an orbit's settings (except Mute) to another orbit, even after loading a different session. Swap with… exchanges two orbits, and Solo lets you hear one on its own. Randomise gives the orbit a new rhythm, sound, movement or everything, within ranges that suit ambient music, and Nudge gently moves its settings a little. Reset gives a plain starting sound, and Undo takes back the last change made from the menu.",
   "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale, number of orbits (4 or 8) and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
   "The [i] button on each page explains its controls.",
@@ -1138,7 +1140,7 @@ function renderVoice(t){
   mute.onclick=()=>{blendHold(t,"mute"); t.mute=!t.mute; mute.setAttribute("aria-pressed",t.mute); t.ringEl.classList.toggle("muted",t.mute);};
   head.append(mute,slider(t,"vol","Level",0,1,0.01,pct));
 
-  const pages=["Pattern","Sound","Motion","Mix"];
+  const pages=["Pattern","Sound","Motion","Mix + MIDI"];
   if(!pages.includes(voicePage)) voicePage=pages[0];
   const nav=pageTabs(pages,voicePage,n=>{voicePage=n; rerender();});
   let page;
