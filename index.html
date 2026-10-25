@@ -24,7 +24,7 @@ img{max-width:100%}
 :root{
   --bg:#13141d; --panel:#1b1d29; --raise:#242737; --line:#30344a;
   --fg:#ebe6da; --muted:#9093a8;
-  --t1:#eaa53c; --t2:#5fc4b6; --t3:#e07a9b; --t4:#7aa7f2;
+  --t1:#eaa53c; --t2:#5fc4b6; --t3:#e07a9b; --t4:#7aa7f2; --t5:#a4c95a; --t6:#b48ef0; --t7:#e58a63; --t8:#62b8e0;
   --gl:#b9d064; --fx:#b39cf0; --ss:#c3c6d6; --help:#f08a4b;
   /* control scale: one text size and two heights for every button, tab and menu */
   --fs-ui:.84rem; --h-ctl:32px; --h-main:38px;
@@ -35,7 +35,7 @@ img{max-width:100%}
 :root[data-app="light"]{
   --bg:#f3f2ee; --panel:#ffffff; --raise:#ebeae5; --line:#d5d3cb;
   --fg:#1c1d26; --muted:#676978;
-  --t1:#b8730c; --t2:#178a7b; --t3:#c03f6a; --t4:#3567cc;
+  --t1:#b8730c; --t2:#178a7b; --t3:#c03f6a; --t4:#3567cc; --t5:#5f8a1c; --t6:#7a4fc4; --t7:#bf5426; --t8:#1f7fae;
   --gl:#62821a; --fx:#6b55d4; --ss:#5b5f72; --help:#cf5a1f;
   color-scheme:light;
 }
@@ -110,6 +110,7 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 
 /* rings */
 .rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 -6px}
+.ring[hidden]{display:none}
 /* everything below lines up with the outer edges of the first and last orbit */
 .dials,.panel,.blendbar,#maininfobox{margin-left:-6px;margin-right:-6px}
 .ring{--acc:var(--t1);font:inherit;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:16px;
@@ -246,7 +247,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.14";
+const APP_VERSION="1.15";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -295,7 +296,7 @@ const KNOBS={
 // Struck types make their own envelope, so the gate colour and decay controls don't affect them.
 const SELF_ENVELOPED=new Set([3,19,20,21,22,23]);
 
-const G = {bpm:60, root:0, scale:"Yo", master:0.9};
+const G = {bpm:60, root:0, scale:"Yo", master:0.9, orbits:4};   // orbits: 4 or 8 shown and playing
 const FX = {
   dMode:"sync", dDiv:1.5, dFree:0.35, dFb:0.55, dTone:0.2, dRet:0.36,
   rTime:0.96, rDamp:0.6, rPre:0.08, rLow:0.22, rRet:1
@@ -321,7 +322,25 @@ const tracks = [
   {...base, name:"D", color:"--t4", steps:13, hits:1, rot:0, voice:"m:8", oct:2, span:1, pull:85,
     vol:0.5, harm:0.15, timb:0.15, morph:0.25, colour:0.3, pan:0, dSend:0, rSend:0.45, cutoff:0.42, res:0.08,
     envMode:"adsr", A:3, D:2.5, S:0.75, R:5, gate:16},
+  // the second row (shown when Global is set to 8 orbits): lighter voice types, sparse, to add detail
+  // E: glassy high wavetable notes, far apart
+  {...base, name:"E", color:"--t5", steps:21, hits:2, rot:5, voice:"m:13", oct:5, span:2, pull:20, mode:"random",
+    vol:0.3, harm:0.55, timb:0.3, morph:0.6, colour:0.3, pan:0.55, dSend:0.5, rSend:0.9, cutoff:0.6,
+    envMode:"adsr", A:0.8, D:2, S:0.5, R:5, gate:3},
+  // F: soft additive tones in the middle
+  {...base, name:"F", color:"--t6", steps:15, hits:3, rot:2, prob:70, voice:"m:12", oct:4, span:1, pull:40, mode:"walk",
+    vol:0.35, harm:0.3, timb:0.2, morph:0.3, colour:0.3, pan:-0.5, dSend:0.35, rSend:0.8, cutoff:0.55,
+    envMode:"adsr", A:1.5, D:2, S:0.6, R:4, gate:6},
+  // G: slow chords underneath
+  {...base, name:"G", color:"--t7", steps:24, hits:1, rot:12, voice:"m:14", oct:3, span:1, pull:70, mode:"walk",
+    vol:0.3, harm:0.25, timb:0.35, morph:0.2, colour:0.3, pan:0.2, dSend:0.1, rSend:0.7, cutoff:0.45, res:0.05,
+    envMode:"adsr", A:4, D:3, S:0.7, R:6, gate:16},
+  // H: breathy filtered noise, like wind
+  {...base, name:"H", color:"--t8", steps:19, hits:2, rot:7, voice:"m:17", oct:4, span:1, pull:30,
+    vol:0.25, harm:0.4, timb:0.5, morph:0.4, colour:0.3, pan:-0.2, dSend:0.2, rSend:1, cutoff:0.5,
+    envMode:"adsr", A:3, D:2, S:0.6, R:6, gate:8},
 ];
+const ORBIT_DEFAULTS=tracks.map(t=>({...t}));   // starting settings, for sessions saved with fewer orbits
 tracks.forEach(t=>{t.mute=false;t.lock=false;t.notes=[];t.last=0;t.pos=-1;t.flash=0;t.alt=0;t.mods=[newMod(),newMod()];});
 // slow movement so the sound keeps evolving without anyone touching it
 const setMod=(ti,i,o)=>{tracks[ti].mods[i]={...tracks[ti].mods[i],...o};};
@@ -333,6 +352,11 @@ setMod(2,0,{target:"cutoff",shape:"sine",rate:0.1,depth:0.25});
 setMod(2,1,{target:"A",shape:"drift",rate:0.12,depth:0.3});
 setMod(3,0,{target:"cutoff",shape:"sine",rate:0.07,depth:0.3});
 setMod(3,1,{target:"res",shape:"drift",rate:0.1,depth:0.25});
+setMod(4,0,{target:"morph",shape:"drift",rate:0.1,depth:0.4});
+setMod(5,0,{target:"timb",shape:"drift",rate:0.07,depth:0.3});
+setMod(6,0,{target:"cutoff",shape:"drift",rate:0.05,depth:0.3});
+setMod(7,0,{target:"cutoff",shape:"drift",rate:0.12,depth:0.5});
+ORBIT_DEFAULTS.forEach((d,i)=>{ d.mods=JSON.parse(JSON.stringify(tracks[i].mods)); });
 
 /* ================= sequencing ================= */
 function euclid(k,n,rot){
@@ -427,6 +451,12 @@ function initAudio(){
 }
 
 let enginesReady=null;
+let ENGINE_STATS=null;
+function engineStatsText(){
+  const s=ENGINE_STATS; if(!s) return "Sound engine: starts when you press Play.";
+  return "Sound engine: "+s.voices+(s.voices===1?" voice":" voices")+" playing, "+Math.round(s.load*100)+"% busy"+
+    (s.steals?", "+s.steals+(s.steals===1?" note":" notes")+" cut short so far.":".");
+}
 async function loadEngines(){
   macroState="loading"; setStatus("Loading sound engines…");
   try{
@@ -435,11 +465,12 @@ async function loadEngines(){
       fetch("macro.wasm").then(r=>{if(!r.ok) throw new Error("engine file missing"); return r.arrayBuffer();}),
       ctx.audioWorklet.addModule("macro-worklet.js")]);
     const ready=node=>new Promise((res,rej)=>{node.port.onmessage=e=>e.data.type==="ready"?res():rej(new Error(e.data.message));});
-    macroNode=new AudioWorkletNode(ctx,"macro-osc",{numberOfInputs:0,numberOfOutputs:4,outputChannelCount:[1,1,1,1],processorOptions:{wasm}});
+    macroNode=new AudioWorkletNode(ctx,"macro-osc",{numberOfInputs:0,numberOfOutputs:8,outputChannelCount:[1,1,1,1,1,1,1,1],processorOptions:{wasm}});
     RV.node=new AudioWorkletNode(ctx,"texture-reverb",{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],processorOptions:{wasm:wasm.slice(0)}});
     await Promise.all([ready(macroNode),ready(RV.node)]);
     tracks.forEach((t,i)=>macroNode.connect(t.vca,i));
     RV.low.disconnect(); RV.low.connect(RV.node); RV.node.connect(RV.ret);
+    macroNode.port.onmessage=e=>{ if(e.data.type==="stats"){ ENGINE_STATS=e.data; const el=document.getElementById("enginestats"); if(el) el.textContent=engineStatsText(); } };
     macroState="ready"; setStatus(""); applyParams();
   }catch(err){
     macroState="failed"; setStatus("The sound engine couldn't load here ("+err.message+"), so the rings are silent. Try reloading, or a recent version of Chrome.");
@@ -518,7 +549,7 @@ function applyContinuousMods(){
   // voice controls are sent to the sound engine, so held and ringing notes keep moving between notes too
   if(macroState==="ready" && n-lastVoiceModSend>0.05){ lastVoiceModSend=n;
     tracks.forEach((t,ti)=>{ if(!VOICE_MOD_KEYS.some(k=>modded(t,k))) return;
-      const p=voiceParams(t,n); [ti,ti+4].forEach(v=>macroNode.port.postMessage({type:"set",v,time:n,...p})); });
+      const p=voiceParams(t,n); [ti,ti+8].forEach(v=>macroNode.port.postMessage({type:"set",v,time:n,...p})); });
   }
 }
 
@@ -558,12 +589,14 @@ function schedule(){
       if(pat[pos]){
         let d;
         if(t.lock && t.notes[pos]!=null) d=t.notes[pos]; else { d=nextDegree(t); t.notes[pos]=d; }
-        if(!t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
+        if(ti<G.orbits && !t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
           const m=degreeToMidi(t,d), gateDur=t.gate*stepDur; name=mname(m);
           triggerEnvelopes(t,time,gateDur);
           if(macroState==="ready"){
-            const v=ti+(t.tails==="ring"?(t.alt^=1)*4:0);
-            macroNode.port.postMessage({type:"trig",v,time,note:m+pitchComp,...voiceParams(t,time)});
+            const v=ti+(t.tails==="ring"?(t.alt^=1)*8:0);
+            // gate and until (when an ADSR note's release has certainly finished) let the engine pick notes to cut if it runs short
+            const adsr=t.envMode==="adsr", until=adsr?Math.max(gateDur,eff(t,"A",time))+eff(t,"R",time)*1.6+0.05:0;
+            macroNode.port.postMessage({type:"trig",v,ring:ti,time,note:m+pitchComp,gate:gateDur,until,...voiceParams(t,time)});
           }
         }
       }
@@ -717,7 +750,7 @@ const T_CONT={prob:0,pull:0,decay:0,harm:0,timb:0,morph:0,mdecay:0,colour:0,pan:
   fenv:0,fdec:0,A:0,D:0,S:0,R:0,gate:0,swing:0,vol:0,oct:1,span:1};
 const T_RHYTHM=["steps","hits","rot","notes","lock"];
 const BLEND={active:false, pos:0, from:null, to:null, fromName:"", toName:"", dur:0, running:false, side:{}, held:new Set(), last:0};
-const orbitPoint=i=>0.2+0.2*i;     // orbit a switches its choices at 20%, b at 40%, c at 60%, d at 80%
+const orbitPoint=i=>(i+1)/((G.orbits||4)+1);   // with 4 orbits: 20%, 40%, 60%, 80%; with 8, every 11%
 function pathOf(obj,key){
   if(obj===G) return "G."+key;
   if(obj===FX) return "FX."+key;
@@ -794,13 +827,15 @@ function restore(snap){
   Object.keys(G).forEach(k=>{if(k in snap.G) G[k]=snap.G[k];});
   const oldSwing=snap.G.swing;   // older sessions had one swing for every ring
   Object.keys(FX).forEach(k=>{if(k in snap.FX) FX[k]=snap.FX[k];});
-  snap.tracks.slice(0,tracks.length).forEach((st,i)=>{const t=tracks[i];
+  if(!("orbits" in snap.G)) G.orbits=4;
+  G.orbits=+G.orbits===8?8:4;
+  tracks.forEach((t,i)=>{ const st=snap.tracks[i]||{...clone(ORBIT_DEFAULTS[i]),mute:false,lock:false,notes:[]}; 
     TKEYS.forEach(k=>{if(k in st) t[k]=clone(st[k]);});
     if(!Array.isArray(t.mods)||t.mods.length<2) t.mods=[newMod(),newMod()];
     if(!("swing" in st)) t.swing=oldSwing||0;
     if(!isMacro(t.voice)) t.voice="m:8";   // older sessions may use the removed simple synths
     t.last=0; t.nnEl.textContent="\u2013"; t.ringEl.classList.toggle("muted",!!t.mute);});
-  applyParams(); updateDials();
+  applyParams(); updateDials(); showOrbits();
 }
 tracks.forEach((t,ti)=>{
   const r=document.createElement("button"); r.className="ring"; r.setAttribute("role","tab");
@@ -827,6 +862,11 @@ tracks.forEach((t,ti)=>{
   t.ringEl=r; t.canvas=r.querySelector("canvas"); t.nnEl=r.querySelector(".nn");
   ringsEl.append(r);
 });
+function showOrbits(){
+  tracks.forEach((t,i)=>{ t.ringEl.hidden=i>=G.orbits; });
+  if(soloIdx>=G.orbits){ soloIdx=-1; updateSolo(); }
+  if(typeof sel==="number" && sel>=G.orbits) selectTab(0);
+}
 function selectTab(s){
   sel=s;
   tracks.forEach((t,i)=>t.ringEl.setAttribute("aria-selected",i===s));
@@ -958,18 +998,18 @@ const INFO={
   "Mix":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right.",
   "Delay":"Every orbit feeds this delay through its Delay send (Mix tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
-  "Global":"Tempo applies to all four orbits. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. Theme switches between dark and light.",
+  "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
   "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
   "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
 };
 const MAIN_INFO=[
   "**Welcome! This is Default Ambience.**",
   "Some info about what's going on here:",
-  "Each of the 4 circular 'orbits' is a looping rhythm. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
+  "Each of the circular 'orbits' is a looping rhythm. There are 4 to start with; Global can switch to 8, in two rows. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Pattern (rhythm and notes), Sound (voice and filter), Motion (envelope and modulation) and Mix.",
   "Press and hold an orbit (or right-click it on a computer) for its menu. Copy and Paste move all of an orbit's settings (except Mute) to another orbit, even after loading a different session. Swap with… exchanges two orbits, and Solo lets you hear one on its own. Randomise gives the orbit a new rhythm, sound, movement or everything, within ranges that suit ambient music, and Nudge gently moves its settings a little. Reset gives a plain starting sound, and Undo takes back the last change made from the menu.",
-  "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
+  "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale, number of orbits (4 or 8) and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
   "The [i] button on each page explains its controls.",
   "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by Emilie Gillet (see [credits] at bottom of page).",
   "This project is still in active development.",
@@ -1137,6 +1177,8 @@ function renderGlobal(){
     full(tempoControl()),
     choice(G,"root","Root",NOTES.map((n,i)=>[i,n]),updateDials),
     scaleChoice(),
+    full(seg(G,"orbits","Orbits",[["4","4"],["8","8"]],()=>{ G.orbits=+G.orbits; showOrbits(); applyParams(); })),
+    (()=>{ const h=hint(engineStatsText()); h.id="enginestats"; return h; })(),
     full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme))));
 }
 function renderMaster(){
@@ -1295,12 +1337,12 @@ function makePreset(g,fx,rings){
 }
 const PRESETS=[
   {name:"Default Ambience", about:"Slow, soft and evolving", data:DEFAULT_SESSION},
-  // a blank canvas: four silent orbits with plain voices, ready for hits to be added
+  // a blank canvas: silent orbits with plain voices, ready for hits to be added
   {name:"Empty", about:"No hits yet. Add hits to an orbit to start from scratch", data:makePreset(
     {bpm:90, root:0, scale:"Yo", master:0.9},
     {dMode:"sync", dDiv:0.75, dFb:0.35, dTone:0.4, dRet:0.35, rTime:0.8, rDamp:0.45, rPre:0.03, rLow:0.15, rRet:0.6},
-    [0,1,2,3].map(i=>({steps:16, hits:0, rot:0, voice:"m:8", oct:[4,3,5,2][i], span:1, vol:0.6,
-      harm:0.2, timb:0.3, morph:0.3, mdecay:0.5, colour:0.4, cutoff:0.8, dSend:0.2, rSend:0.3, pan:[-0.3,0.3,-0.15,0][i]})))}
+    [0,1,2,3,4,5,6,7].map(i=>({steps:16, hits:0, rot:0, voice:"m:8", oct:[4,3,5,2,4,3,5,3][i], span:1, vol:0.6,
+      harm:0.2, timb:0.3, morph:0.3, mdecay:0.5, colour:0.4, cutoff:0.8, dSend:0.2, rSend:0.3, pan:[-0.3,0.3,-0.15,0,0.45,-0.45,0.15,-0.1][i]})))}
 ];
 restore(DEFAULT_SESSION);
 selectTab(0);

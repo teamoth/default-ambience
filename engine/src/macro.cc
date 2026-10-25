@@ -4,7 +4,7 @@
 
 using namespace plaits;
 
-static const int kVoices = 8;
+static const int kVoices = 16;
 static const int kChunk = 8;
 
 static char ram[kVoices][16384];
