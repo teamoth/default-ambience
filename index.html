@@ -260,7 +260,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.25";
+const APP_VERSION="1.26";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -754,6 +754,13 @@ document.getElementById("play").addEventListener("click",()=>playing?stop():star
 /* ================= controls ================= */
 let uid=0;
 // Slider that only moves on a sideways drag (relative, so a tap never jumps it) and lets vertical swipes scroll the page.
+// line up the − buttons on the open page: every value box takes the width of the widest one
+// (the orbit's Level, beside Mute, is left as it is)
+let alignQueued=false;
+function alignSoon(){ if(alignQueued) return; alignQueued=true;
+  requestAnimationFrame(()=>{ alignQueued=false;
+    const outs=[...document.querySelectorAll("#panel .val output[data-w]")].filter(o=>!o.closest(".vhead"));
+    const w=Math.max(0,...outs.map(o=>+o.dataset.w)); outs.forEach(o=>{ o.style.minWidth=w+"ch"; }); }); }
 // − and + beside the value nudge it by one small step (hold to keep going); slider.plain=true leaves them out
 function slider(obj,key,label,min,max,step,fmt,onchange){
   const id="sl"+(uid++), plain=slider.plain; slider.plain=false;
@@ -793,7 +800,8 @@ function slider(obj,key,label,min,max,step,fmt,onchange){
     let widest=0; const count=Math.round((max-min)/step), every=Math.max(1,Math.floor(count/400));
     for(let i=0;i<=count;i+=every){ try{ widest=Math.max(widest,String(fmt(+(min+i*step).toFixed(4))).length); }catch(e){} }
     try{ widest=Math.max(widest,String(fmt(max)).length); }catch(e){}
-    out.style.minWidth=widest+"ch";
+    out.style.minWidth=widest+"ch"; out.dataset.w=widest;
+    alignSoon();
     w.querySelectorAll(".nb").forEach((b,i)=>{
       const d=i?n:-n; let hold=null, rep=null;
       const go=()=>setV(obj[key]+d), stop=()=>{ clearTimeout(hold); clearInterval(rep); };
@@ -1350,8 +1358,7 @@ function renderVoice(t){
       t.midi&&!MIDI.out?hint("Pick a MIDI output in Global to send these notes."):null);
   }
   const [vi,vbox]=infoToggle(voicePage);
-  const firstHead=page.querySelector(".secthead");   // the i sits at the end of the page's first heading, clear of Level's + button
-  if(firstHead){ firstHead.classList.add("withi"); firstHead.append(vi); } else head.append(vi);
+  head.prepend(vi);   // the i sits at the start of the row, before Mute, clear of Level's − and +
   panel.append(head,nav,vbox,page);
 }
 
