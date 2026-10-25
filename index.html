@@ -250,7 +250,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.22";
+const APP_VERSION="1.23";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -839,15 +839,40 @@ function snapshot(){
     tracks:tracks.map(t=>Object.fromEntries(TKEYS.map(k=>[k,clone(t[k])])))};
 }
 const CODE_START="[start]", CODE_END="[end]";
-function encodeSession(snap){ return CODE_START+JSON.stringify(snap)+CODE_END; }
+/* ---- compact codes ----
+   Numbers are rounded to 4 decimal places (far finer than any control), the text is compressed,
+   and the result is written with letters, digits, - and _ so it survives being pasted anywhere.
+   A compact code body starts with "~"; plain codes from older versions still load. */
+const CZ="~";
+const roundNums=(k,v)=>typeof v==="number"&&!Number.isInteger(v)?+v.toFixed(4):v;
+function bytesToB64u(bytes){ let s=""; for(let i=0;i<bytes.length;i+=0x8000) s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+  return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
+function b64uToBytes(str){ const s=atob(str.replace(/-/g,"+").replace(/_/g,"/")+"===".slice((str.length+3)%4)); const out=new Uint8Array(s.length);
+  for(let i=0;i<s.length;i++) out[i]=s.charCodeAt(i); return out; }
+async function packJSON(obj){
+  const json=JSON.stringify(obj,roundNums);
+  if(typeof CompressionStream==="undefined") return json;
+  const z=new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return CZ+bytesToB64u(new Uint8Array(await new Response(z).arrayBuffer()));
+}
+async function unpackJSON(body,what){
+  body=body.trim();
+  if(!body.startsWith(CZ)) return JSON.parse(body);
+  if(typeof DecompressionStream==="undefined") throw new Error("This browser can't read compact codes. Try a recent Chrome, Edge, Firefox or Safari.");
+  try{
+    const z=new Blob([b64uToBytes(body.slice(1).replace(/\s+/g,""))]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return JSON.parse(await new Response(z).text());
+  }catch(e){ throw new Error("That "+what+" isn't complete or has been changed. Copy the whole "+what+" and try again."); }
+}
+async function encodeSession(snap){ return CODE_START+await packJSON(snap)+CODE_END; }
 // A backup holds every saved session, with names, between [sessions] and [end].
 const BACKUP_START="[sessions]";
-const encodeBackup=list=>BACKUP_START+JSON.stringify({v:1,sessions:list})+CODE_END;
+const encodeBackup=async list=>BACKUP_START+await packJSON({v:1,sessions:list})+CODE_END;
 const isBackup=text=>text.includes(BACKUP_START);
-function decodeBackup(text){
+async function decodeBackup(text){
   const t=text.trim(), a=t.indexOf(BACKUP_START), b=t.lastIndexOf(CODE_END);
   if(b<a) throw new Error("The backup is missing its [end], so part of it was cut off. Copy the whole backup and try again.");
-  let d; try{ d=JSON.parse(t.slice(a+BACKUP_START.length,b)); }catch(e){ throw new Error("That backup isn't valid. Copy the whole backup and try again."); }
+  let d; try{ d=await unpackJSON(t.slice(a+BACKUP_START.length,b),"backup"); }catch(e){ throw new Error(e.message.startsWith("That")||e.message.startsWith("This")?e.message:"That backup isn't valid. Copy the whole backup and try again."); }
   const list=(d&&Array.isArray(d.sessions)?d.sessions:[]).filter(it=>it&&it.data&&it.data.G&&Array.isArray(it.data.tracks));
   if(!list.length) throw new Error("That backup has no sessions in it.");
   return list;
@@ -860,7 +885,7 @@ function importBackup(items){
     l.push({name, saved:it.saved||new Date().toISOString(), data:it.data}); });
   storeSessions(l); return items.length;
 }
-function decodeSession(text){
+async function decodeSession(text){
   const t=text.trim(), a=t.indexOf(CODE_START), b=t.lastIndexOf(CODE_END);
   let body;
   if(a>=0||b>=0){
@@ -868,7 +893,30 @@ function decodeSession(text){
     if(b<0||b<a) throw new Error("The code is missing its [end], so part of it was cut off. Copy the whole code and try again.");
     body=t.slice(a+CODE_START.length,b);
   } else body=t;
-  try{ return JSON.parse(body); }catch(e){ throw new Error("That code isn't a valid session."); }
+  try{ return await unpackJSON(body,"code"); }catch(e){ throw new Error(e.message.startsWith("That")||e.message.startsWith("This")?e.message:"That code isn't a valid session."); }
+}
+/* ---- backup files ----
+   On the website the file downloads; in the Android app it opens the share menu (save to Drive, email it…). */
+async function saveTextFile(name,text){
+  const P=window.Capacitor&&window.Capacitor.Plugins;
+  if(window.DA_APP&&P&&P.Filesystem&&P.Share){
+    const r=await P.Filesystem.writeFile({path:name,data:text,directory:"CACHE",encoding:"utf8"});
+    await P.Share.share({title:name,files:[r.uri],dialogTitle:"Save or send the backup"});
+    return "shared";
+  }
+  const url=URL.createObjectURL(new Blob([text],{type:"text/plain"}));
+  const a=document.createElement("a"); a.href=url; a.download=name; document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  return "downloaded";
+}
+function pickTextFile(){
+  return new Promise((res,rej)=>{
+    const inp=document.createElement("input"); inp.type="file"; inp.accept=".txt,text/plain";
+    inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return rej(new Error("No file chosen."));
+      if(f.size>5e6) return rej(new Error("That file is too big to be a session backup."));
+      f.text().then(res,()=>rej(new Error("That file couldn't be read."))); };
+    inp.click();
+  });
 }
 /* ================= blending between two sessions =================
    Numbers glide; choices (voice, rhythm, scale…) switch at a point along the way.
@@ -1133,7 +1181,7 @@ const INFO={
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
   "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix + MIDI tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
   "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
-  "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there. Copy all sessions makes a single backup of every saved session (with their names): keep it somewhere safe, and paste it into the code box and press Load code to add them all back, for example after reinstalling the app. Names that are already taken get a number, so nothing is overwritten.",
+  "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there. Copy all sessions makes a single backup of every saved session (with their names), and Save backup file saves the same thing as a file (in the app, choose where it goes, such as Drive or email). To add them all back, for example after reinstalling the app, paste the backup and press Load code, or use Load from file. Codes are compact, so they fit in notes and messages. Names that are already taken get a number, so nothing is overwritten.",
 };
 const MAIN_INFO=[
   "**Welcome! This is Default Ambience.**",
@@ -1433,22 +1481,34 @@ function sessionsBody(){
   // move between devices or browsers
   wrap.append(sectHead("Share and back up"));
   const tx=document.createElement("div"); tx.className="ctl full"; tx.style.cssText="gap:8px";
-  tx.innerHTML=`<span class="hint">Copy the current setup as a code to send to a friend or another device, or paste a code here to load it. Copy all sessions makes one backup of every saved session; paste it here and press Load code to add them all back.</span>`;
-  const code=document.createElement("textarea"); code.id="sesscode"; code.style.minHeight="90px"; code.placeholder="Paste a session code (from [start] to [end]) or a backup (from [sessions] to [end]) here.";
+  tx.innerHTML=`<span class="hint">Copy the current setup as a code to send to a friend or another device, or paste a code here and press Load code. To back up every saved session at once, use Copy all sessions (one block of text) or Save backup file; load either one back the same way.</span>`;
+  const code=document.createElement("textarea"); code.id="sesscode"; code.style.minHeight="90px"; code.placeholder="Paste a session code or a backup here.";
   const b2=document.createElement("div"); b2.className="btns";
-  const cpy=mkBtn("Copy current as code"), all=mkBtn("Copy all sessions"), ld=mkBtn("Load code");
+  const cpy=mkBtn("Copy current as code"), ld=mkBtn("Load code");
+  const b3=document.createElement("div"); b3.className="btns";
+  const all=mkBtn("Copy all sessions"), sav=mkBtn("Save backup file"), opn=mkBtn("Load from file");
   const st2=document.createElement("span"); st2.className="note"; st2.id="codestatus"; st2.setAttribute("role","status");
-  cpy.onclick=()=>copyText(encodeSession(snapshot()),st2,code);
-  all.disabled=!list.length; all.title=list.length?"Copy every saved session as one backup":"No saved sessions to back up yet";
-  all.onclick=()=>{ copyText(encodeBackup(loadSessions()),st2,code); setTimeout(()=>{ if(st2.textContent==="Copied") st2.textContent="Copied "+list.length+(list.length===1?" session":" sessions")+". Keep it somewhere safe."; },10); };
-  ld.onclick=()=>{
-    try{
-      if(isBackup(code.value)){ const n=importBackup(decodeBackup(code.value)); SS.i=0; renderSessions(); updateDials();
-        const s2=document.getElementById("codestatus"); if(s2) s2.textContent="Added "+n+(n===1?" session":" sessions")+" to Your sessions.";
-        return; }
-      restore(decodeSession(code.value)); st2.textContent="Loaded";
-    }catch(e){st2.textContent=e.message;} };
-  b2.append(cpy,all,ld,st2); tx.append(code,b2);
+  const say=t=>{ const s2=document.getElementById("codestatus"); if(s2) s2.textContent=t; };
+  cpy.onclick=async()=>copyText(await encodeSession(snapshot()),st2,code);
+  [all,sav].forEach(b=>{ b.disabled=!list.length; if(!list.length) b.title="No saved sessions to back up yet"; });
+  const nS=n=>n+(n===1?" session":" sessions");
+  all.onclick=async()=>{ copyText(await encodeBackup(loadSessions()),st2,code); setTimeout(()=>{ if(st2.textContent==="Copied") st2.textContent="Copied "+nS(list.length)+". Keep it somewhere safe."; },10); };
+  sav.onclick=async()=>{
+    try{ const d=new Date(), name="default-ambience-sessions-"+d.toISOString().slice(0,10)+".txt";
+      const how=await saveTextFile(name,await encodeBackup(loadSessions())+"\n");
+      say(how==="shared"?"Choose where to keep the backup ("+nS(list.length)+").":"Saved "+name+" ("+nS(list.length)+") to your downloads."); }
+    catch(e){ say("The backup file couldn't be saved here. Use Copy all sessions instead."); }
+  };
+  // a pasted code or a chosen file: a backup adds every session in it, a single code loads it to play
+  const loadText=async text=>{
+    if(isBackup(text)){ const n=importBackup(await decodeBackup(text)); SS.i=0; renderSessions(); updateDials(); say("Added "+nS(n)+" to Your sessions."); return; }
+    restore(await decodeSession(text)); say("Loaded");
+  };
+  ld.onclick=async()=>{ try{ await loadText(code.value); }catch(e){ say(e.message); } };
+  opn.onclick=async()=>{ try{ await loadText(await pickTextFile()); }catch(e){ say(e.message); } };
+  b3.append(all,sav,opn);
+  b2.append(cpy,ld); tx.append(code,b2,b3,st2);
+
   wrap.append(tx);
   panel.append(wrap);
 }

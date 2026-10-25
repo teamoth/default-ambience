@@ -10,6 +10,8 @@
     "@capacitor/android": "latest",
     "@capacitor/app": "latest",
     "@capacitor/cli": "latest",
-    "@capacitor/core": "latest"
+    "@capacitor/core": "latest",
+    "@capacitor/filesystem": "latest",
+    "@capacitor/share": "latest"
   }
 }
