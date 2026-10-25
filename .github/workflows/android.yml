@@ -4,6 +4,7 @@
 # Signing: with the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets set, every APK is
 # signed with the app's own key, so new versions install over old ones. Without them, a throwaway
 # debug key is used and each test build has to replace the last by uninstalling first.
+# (The secrets were added on 25 October 2026.)
 name: Android test build
 on:
   push:
