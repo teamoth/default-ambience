@@ -249,7 +249,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.18";
+const APP_VERSION="1.19";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -307,7 +307,7 @@ const base = {prob:100, pull:20, mode:"random", decay:0.5, harm:0.4, timb:0.5, m
   pan:0, dSend:0.2, rSend:0.3, ftype:"lowpass", cutoff:1, res:0.1, fenv:0, fdec:0.3,
   envMode:"natural", A:0.01, D:0.3, S:0.6, R:0.4, gate:1, tails:"cut", swing:0,
   midi:0, local:"on", vel:100};   // vel: velocity of each hit, 1-127 like MIDI (100 = normal loudness)   // midi: channel 1-16 this orbit sends notes on (0 = off); local: play its own sound
-const newMod=()=>({target:"off", shape:"sine", rate:0.35, depth:0.5, seed:Math.random()*100});
+const newMod=()=>({src:"lfo", target:"off", shape:"sine", rate:0.35, depth:0.5, seed:Math.random()*100});
 const NMODS=3;   // modulators per orbit
 const newMods=()=>Array.from({length:NMODS},newMod);
 const tracks = [
@@ -533,8 +533,34 @@ function lfo(m,T){
   const a=rnd(k,m.seed), b=rnd(k+1,m.seed), e=(1-Math.cos(Math.PI*f))/2; return a+(b-a)*e; // drift
 }
 const modded=(t,key)=>t.mods.some(m=>m.target===key&&m.depth!==0);
+/* ---- modulation sources ----
+   lfo:   a slow wave (Shape and Rate)
+   hit:   a new random value on every note the orbit plays (-1..1)
+   pos:   rises from 0 at the start of the orbit's loop to 1 at its end
+   pitch: where the note sits in the orbit's range, low -1 .. high +1
+   Note-based values are stored with the time the note sounds, so they change exactly when it is heard. */
+const MOD_SOURCES=[["lfo","LFO"],["hit","Random per hit"],["pos","Pattern position"],["pitch","Note pitch"]];
+const SOURCE_HINTS={hit:"A new random value on every hit: depth sets how far it can go either way.",
+  pos:"Rises from the start of this orbit's loop to its end, then starts again: positive depth builds up, negative fades down.",
+  pitch:"Follows each note: higher notes push one way, lower notes the other."};
+function heldPush(q,time,v){ q.push({time,v}); if(q.length>32) q.splice(0,q.length-32); }
+function heldAt(q,T,dflt){ for(let i=q.length-1;i>=0;i--) if(q[i].time<=T) return q[i].v; return dflt; }
+function modNote(t,time,midi){   // called for each note the orbit plays
+  if(!t.mq) t.mq=[];
+  t.mods.forEach((m,j)=>{ const q=t.mq[j]||(t.mq[j]=[]);
+    if(m.src==="hit") heldPush(q,time,Math.random()*2-1);
+    else if(m.src==="pitch"){ const lo=12*(t.oct+1)+G.root, span=12*Math.max(1,t.span); heldPush(q,time,Math.max(-1,Math.min(1,(midi-lo)/span*2-1))); } });
+}
+function modLoopStart(t,time,dur){ if(!t.loops) t.loops=[]; heldPush(t.loops,time,dur); }
+function srcVal(t,m,j,T){
+  switch(m.src){
+    case "hit": case "pitch": return heldAt((t.mq&&t.mq[j])||[],T,0);
+    case "pos": { const L=t.loops||[]; for(let i=L.length-1;i>=0;i--) if(L[i].time<=T) return Math.max(0,Math.min(1,(T-L[i].time)/L[i].v)); return 0; }
+    default: return lfo(m,T);
+  }
+}
 function eff(t,key,T){
-  let sum=0; t.mods.forEach(m=>{ if(m.target===key) sum+=m.depth*lfo(m,T); });
+  let sum=0; t.mods.forEach((m,j)=>{ if(m.target===key) sum+=m.depth*srcVal(t,m,j,T); });
   const v=t[key]; if(sum===0) return v;
   const [lo,hi,lg]=RANGES[key];
   let p=lg?Math.log(Math.max(lo,v)/lo)/Math.log(hi/lo):(v-lo)/(hi-lo);
@@ -662,12 +688,14 @@ function schedule(){
     tracks.forEach((t,ti)=>{
       const time=nextTime+((tick%2===1)?stepDur*t.swing/100*0.5:0);
       const pos=tick%t.steps, pat=euclid(t.hits,t.steps,t.rot);
+      if(pos===0) modLoopStart(t,nextTime,t.steps*stepDur);
       let name=null;
       if(pat[pos]){
         let d;
         if(t.lock && t.notes[pos]!=null) d=t.notes[pos]; else { d=nextDegree(t); t.notes[pos]=d; }
         if(ti<G.orbits && !t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
           const m=degreeToMidi(t,d), gateDur=t.gate*stepDur; name=mname(m);
+          modNote(t,time,m);
           const vel=Math.max(1,Math.min(127,Math.round(eff(t,"vel",time))));
           if(t.midi) midiNote(t.midi,m,time,gateDur,vel);
           if(t.local!=="off") triggerEnvelopes(t,time,gateDur);
@@ -857,10 +885,11 @@ function applyBlend(){
     t.ringEl.classList.toggle("muted",!!t.mute);
     for(let j=0;j<NMODS;j++){
       const ma=(a.mods||[])[j]||newMod(), mb=(b.mods||[])[j]||newMod(), m=t.mods[j], base="T"+i+".m"+j+".";
-      if(ma.target===mb.target && ma.shape===mb.shape){
+      if(ma.target===mb.target && ma.shape===mb.shape && (ma.src||"lfo")===(mb.src||"lfo")){
+        if(!H.has(base+"src")) m.src=ma.src||"lfo";
         ["target","shape"].forEach(k=>{ if(!H.has(base+k)) m[k]=ma[k]; });
         cont(m,"rate",ma.rate,mb.rate,0,base+"rate"); cont(m,"depth",ma.depth,mb.depth,0,base+"depth");
-      } else ["target","shape","rate","depth","seed"].forEach(k=>pick(m,k,ma[k],mb[k],pt,base+k));
+      } else ["src","target","shape","rate","depth","seed"].forEach(k=>pick(m,k,ma[k]??(k==="src"?"lfo":undefined),mb[k]??(k==="src"?"lfo":undefined),pt,base+k));
     }
   });
   applyParams();
@@ -914,6 +943,7 @@ function restore(snap){
     if(!Array.isArray(t.mods)) t.mods=[]; while(t.mods.length<NMODS) t.mods.push(newMod());
     if(!("swing" in st)) t.swing=oldSwing||0;
     if(!("vel" in st)) t.vel=100;   // sessions from before velocity
+    t.mods.forEach(m=>{ if(!m.src) m.src="lfo"; });
     if(!isMacro(t.voice)) t.voice="m:8";   // older sessions may use the removed simple synths
     t.last=0; t.nnEl.textContent="\u2013"; t.ringEl.classList.toggle("muted",!!t.mute);});
   applyParams(); updateDials(); showOrbits();
@@ -976,7 +1006,7 @@ function orbitChanged(...idx){
     t.steps=Math.max(2,Math.min(32,Math.round(t.steps))); t.hits=Math.max(0,Math.min(t.steps,Math.round(t.hits)));
     t.rot=Math.max(0,Math.min(t.steps-1,Math.round(t.rot)));
     if(BLEND.active){ TKEYS.forEach(k=>BLEND.held.add("T"+i+"."+k));
-      for(let j=0;j<NMODS;j++) ["target","shape","rate","depth","seed"].forEach(k=>BLEND.held.add("T"+i+".m"+j+"."+k)); }
+      for(let j=0;j<NMODS;j++) ["src","target","shape","rate","depth","seed"].forEach(k=>BLEND.held.add("T"+i+".m"+j+"."+k)); }
     t.last=0; t.nnEl.textContent="–"; t.ringEl.classList.toggle("muted",!!t.mute); });
   applyParams(); updateDials(); if(idx.includes(sel)) selectTab(sel);
 }
@@ -1014,7 +1044,7 @@ function rollSound(t){
   t.gate=pick([1,2,3,4,6,8,10,12]); t.tails=chance(0.4)?"ring":"cut";
 }
 function rollMovement(t){
-  t.mods=Array.from({length:NMODS},()=>chance(0.4)?newMod():{target:pick(MOD_TARGETS.slice(1))[0], shape:pick(["sine","triangle","random","drift"]),
+  t.mods=Array.from({length:NMODS},()=>chance(0.4)?newMod():{src:pick(["lfo","lfo","lfo","hit","hit","pos","pitch"]), target:pick(MOD_TARGETS.slice(1))[0], shape:pick(["sine","triangle","random","drift"]),
     rate:R(0.05,0.5), depth:(chance(0.5)?1:-1)*R(0.15,0.6), seed:Math.random()*100});
 }
 function rollMix(t){ t.pan=R(-0.6,0.6); t.dSend=R(0,0.6); t.rSend=R(0.3,1); }
@@ -1075,7 +1105,7 @@ function openOrbitMenu(i){
 const INFO={
   "Pattern":"Rhythm: Rotate shifts where the pattern starts (watch the orbit turn as you drag it), Hits is how many notes are spread evenly around the orbit, Steps is its length, Chance lets hits sometimes drop out, Velocity sets how hard each hit plays (1–127, as in MIDI: it changes the loudness of the orbit's own sound and is sent with its MIDI notes; 100 is normal), and Swing delays every other step for a looser feel. Notes: New melody picks fresh notes for this orbit, and Melody lock keeps repeating the current ones. Movement: Random can jump anywhere in the range, Walk moves a step or two from the last note. Root pull snaps some notes to the root. Octave and Range set where notes can fall. Tip: press and hold an orbit for copy, paste, swap, solo and randomise.",
   "Sound":"Voice type picks the sound; every type comes from open-source Eurorack DSP code. The first three controls are the module's harmonics, timbre and morph knobs, renamed for what they do on each type. Gate colour sets how much notes darken as they fade, and Decay how long they ring; struck types (strings, resonators, drums and six-op FM) shape their own fade, so these two are hidden for them. The filter then shapes the tone: Cutoff sets its frequency and Resonance emphasises it. Envelope amount sweeps the cutoff up (+) or down (−) on each note, settling back over the envelope decay time.",
-  "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: three slow movers per orbit. Target picks the setting: velocity, any voice control (named for the current voice type), the filter, or the amp envelope. Voice controls keep moving while a note holds, and envelope settings change from one note to the next. Shape the movement (Random jumps, Drift glides), Rate the speed, and Depth how far it moves (negative moves the other way).",
+  "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: three movers per orbit. Source picks what moves it: LFO is a slow wave (Shape and Rate); Random per hit picks a new value on every note; Pattern position rises over each time round the orbit's loop; Note pitch follows how high each note is. Target picks the setting: velocity, any voice control (named for the current voice type), the filter, or the amp envelope. Voice controls keep moving while a note holds, and envelope settings change from one note to the next. For an LFO, Shape is the movement (Random jumps, Drift glides) and Rate the speed. Depth is how far it moves (negative moves the other way).",
   "Mix + MIDI":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right. Channel sends this orbit's notes (with their gate length) to the MIDI output chosen in Global; turn Internal sound off to hear only the MIDI instrument. Mute silences both.",
   "Delay":"Every orbit feeds this delay through its Delay send (Mix + MIDI tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
@@ -1202,12 +1232,14 @@ function renderVoice(t){
     page.append(sect("Modulation"));
     t.mods.forEach((m,i)=>{
       const box=document.createElement("div"); box.className="modslot full";
+      const lfoSrc=(m.src||"lfo")==="lfo";
       const grid=pageGrid(
-        full(choice(m,"target",`Mod ${i+1} target`,modTargetOptions(t,m.target),rerender)),
-        full(seg(m,"shape","Shape",[["sine","Sine"],["triangle","Triangle"],["random","Random"],["drift","Drift"]])),
-        slider(m,"rate","Rate",0,1,0.005,r=>{const h=modHz(r); return h<1?(1/h).toFixed(1)+" s cycle":h.toFixed(2)+" Hz";}),
+        choice(m,"src",`Mod ${i+1} source`,MOD_SOURCES,rerender),
+        choice(m,"target","Target",modTargetOptions(t,m.target),rerender),
+        ...(lfoSrc?[full(seg(m,"shape","Shape",[["sine","Sine"],["triangle","Triangle"],["random","Random"],["drift","Drift"]])),
+          slider(m,"rate","Rate",0,1,0.005,r=>{const h=modHz(r); return h<1?(1/h).toFixed(1)+" s cycle":h.toFixed(2)+" Hz";})]:[hint(SOURCE_HINTS[m.src])]),
         slider(m,"depth","Depth",-1,1,0.01,v=>(v>0?"+":"")+Math.round(v*100)+"%"));
-      if(m.target==="off") grid.querySelectorAll(".ctl:not(:first-child)").forEach(el=>el.classList.add("dim"));
+      if(m.target==="off") grid.querySelectorAll(".ctl:nth-child(n+3)").forEach(el=>el.classList.add("dim"));
       box.append(grid); page.append(box);
     });
   } else {
