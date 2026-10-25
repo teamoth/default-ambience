@@ -250,7 +250,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.21";
+const APP_VERSION="1.22";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -840,6 +840,26 @@ function snapshot(){
 }
 const CODE_START="[start]", CODE_END="[end]";
 function encodeSession(snap){ return CODE_START+JSON.stringify(snap)+CODE_END; }
+// A backup holds every saved session, with names, between [sessions] and [end].
+const BACKUP_START="[sessions]";
+const encodeBackup=list=>BACKUP_START+JSON.stringify({v:1,sessions:list})+CODE_END;
+const isBackup=text=>text.includes(BACKUP_START);
+function decodeBackup(text){
+  const t=text.trim(), a=t.indexOf(BACKUP_START), b=t.lastIndexOf(CODE_END);
+  if(b<a) throw new Error("The backup is missing its [end], so part of it was cut off. Copy the whole backup and try again.");
+  let d; try{ d=JSON.parse(t.slice(a+BACKUP_START.length,b)); }catch(e){ throw new Error("That backup isn't valid. Copy the whole backup and try again."); }
+  const list=(d&&Array.isArray(d.sessions)?d.sessions:[]).filter(it=>it&&it.data&&it.data.G&&Array.isArray(it.data.tracks));
+  if(!list.length) throw new Error("That backup has no sessions in it.");
+  return list;
+}
+// adds backed-up sessions to the saved list; a name that's already taken gets a number, so nothing is overwritten
+function importBackup(items){
+  const l=loadSessions().slice(), names=new Set(l.map(it=>it.name));
+  items.forEach(it=>{ let name=String(it.name||"Session").slice(0,40), n=2, base=name;
+    while(names.has(name)){ name=base+" ("+(n++)+")"; } names.add(name);
+    l.push({name, saved:it.saved||new Date().toISOString(), data:it.data}); });
+  storeSessions(l); return items.length;
+}
 function decodeSession(text){
   const t=text.trim(), a=t.indexOf(CODE_START), b=t.lastIndexOf(CODE_END);
   let body;
@@ -1113,7 +1133,7 @@ const INFO={
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
   "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix + MIDI tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
   "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
-  "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
+  "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there. Copy all sessions makes a single backup of every saved session (with their names): keep it somewhere safe, and paste it into the code box and press Load code to add them all back, for example after reinstalling the app. Names that are already taken get a number, so nothing is overwritten.",
 };
 const MAIN_INFO=[
   "**Welcome! This is Default Ambience.**",
@@ -1411,16 +1431,24 @@ function sessionsBody(){
   }
   wrap.append(box,status);
   // move between devices or browsers
-  wrap.append(sectHead("Share with a code"));
+  wrap.append(sectHead("Share and back up"));
   const tx=document.createElement("div"); tx.className="ctl full"; tx.style.cssText="gap:8px";
-  tx.innerHTML=`<span class="hint">Copy the current setup as a code to send to a friend or another device, or paste a code here to load it.</span>`;
-  const code=document.createElement("textarea"); code.id="sesscode"; code.style.minHeight="90px"; code.placeholder="Paste a session code here. It runs from [start] to [end].";
+  tx.innerHTML=`<span class="hint">Copy the current setup as a code to send to a friend or another device, or paste a code here to load it. Copy all sessions makes one backup of every saved session; paste it here and press Load code to add them all back.</span>`;
+  const code=document.createElement("textarea"); code.id="sesscode"; code.style.minHeight="90px"; code.placeholder="Paste a session code (from [start] to [end]) or a backup (from [sessions] to [end]) here.";
   const b2=document.createElement("div"); b2.className="btns";
-  const cpy=mkBtn("Copy current as code"), ld=mkBtn("Load code");
-  const st2=document.createElement("span"); st2.className="note"; st2.setAttribute("role","status");
+  const cpy=mkBtn("Copy current as code"), all=mkBtn("Copy all sessions"), ld=mkBtn("Load code");
+  const st2=document.createElement("span"); st2.className="note"; st2.id="codestatus"; st2.setAttribute("role","status");
   cpy.onclick=()=>copyText(encodeSession(snapshot()),st2,code);
-  ld.onclick=()=>{ try{restore(decodeSession(code.value)); st2.textContent="Loaded";}catch(e){st2.textContent=e.message;} };
-  b2.append(cpy,ld,st2); tx.append(code,b2);
+  all.disabled=!list.length; all.title=list.length?"Copy every saved session as one backup":"No saved sessions to back up yet";
+  all.onclick=()=>{ copyText(encodeBackup(loadSessions()),st2,code); setTimeout(()=>{ if(st2.textContent==="Copied") st2.textContent="Copied "+list.length+(list.length===1?" session":" sessions")+". Keep it somewhere safe."; },10); };
+  ld.onclick=()=>{
+    try{
+      if(isBackup(code.value)){ const n=importBackup(decodeBackup(code.value)); SS.i=0; renderSessions(); updateDials();
+        const s2=document.getElementById("codestatus"); if(s2) s2.textContent="Added "+n+(n===1?" session":" sessions")+" to Your sessions.";
+        return; }
+      restore(decodeSession(code.value)); st2.textContent="Loaded";
+    }catch(e){st2.textContent=e.message;} };
+  b2.append(cpy,all,ld,st2); tx.append(code,b2);
   wrap.append(tx);
   panel.append(wrap);
 }
