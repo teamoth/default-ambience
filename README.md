@@ -4,11 +4,14 @@ A Euclidean sequencer for ambient music, made for phones and browsers.
 
 **▶ Play it now: [teamoth.github.io/default-ambience](https://teamoth.github.io/default-ambience/)** (works in any modern browser, on phones and computers)
 
-Four **orbits** each loop a rhythm: a number of hits spread as evenly as possible around a number of steps. Every hit picks a note from the scale you choose, so the melodies are random but always in key. Orbits of different lengths drift in and out of line with each other, so the music keeps changing.
+**Android:** download the app from [Releases](https://github.com/teamoth/default-ambience/releases) (the `.apk` file). A Google Play version is on the way.
+
+Four (or eight) **orbits** each loop a rhythm: a number of hits spread as evenly as possible around a number of steps. Every hit picks a note from the scale you choose, so the melodies are random but always in key. Orbits of different lengths drift in and out of line with each other, so the music keeps changing.
 
 - 21 voice types, built from open-source Eurorack synthesiser code
 - 24 scales, including Yo, In, Hirajoshi, Kumoi and pentatonics
-- Per-orbit filter, ADSR envelope, two slow modulators, swing and melody lock
+- Per-orbit filter, ADSR envelope, velocity, three modulators (LFO, random per hit, pattern position or note pitch), swing and melody lock
+- MIDI output: each orbit can send its notes on its own channel (Chrome or Edge)
 - Sends to master delay and reverb
 - Sessions you can save, and share with anyone as a string of text
 - Works offline once loaded, and can be installed from the browser

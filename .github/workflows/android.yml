@@ -1,11 +1,20 @@
-# Builds a test version of the Android app whenever the app changes,
-# and puts the installable file (APK) on the "Android test build" release.
+# Builds the Android app whenever the app changes and puts the installable file (APK) on the
+# "Android test build" pre-release. Run it by hand with "Publish a release" ticked to also make a
+# public release (e.g. v1.21) that anyone can download.
+# Signing: with the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets set, every APK is
+# signed with the app's own key, so new versions install over old ones. Without them, a throwaway
+# debug key is used and each test build has to replace the last by uninstalling first.
 name: Android test build
 on:
   push:
     branches: [main]
     paths: [index.html, macro.wasm, macro-worklet.js, icons/**, scripts/**, package.json, capacitor.config.json, .github/workflows/android.yml]
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a public release for this version
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -36,16 +45,44 @@ jobs:
           python3 scripts/android-icons.py
           python3 scripts/android-version.py
       - name: Build the APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        env:
+          KEY_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          cd android
+          if [ -n "$KEY_B64" ]; then
+            ./gradlew assembleRelease --no-daemon
+            BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+            echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/key.p12"
+            "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" sign --ks "$RUNNER_TEMP/key.p12" --ks-pass env:KEY_PW --ks-key-alias defaultambience --key-pass env:KEY_PW --out ../app.apk "$RUNNER_TEMP/aligned.apk"
+            "$BT/apksigner" verify ../app.apk
+            rm -f "$RUNNER_TEMP/key.p12"
+            echo "SIGNED=yes" >> "$GITHUB_ENV"
+          else
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk ../app.apk
+            echo "SIGNED=no" >> "$GITHUB_ENV"
+          fi
       - name: Publish to the "Android test build" release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK=DefaultAmbience-${{ steps.ver.outputs.name }}-test.apk
-          cp android/app/build/outputs/apk/debug/app-debug.apk "$APK"
-          gh release view android-test >/dev/null 2>&1 || gh release create android-test --prerelease --title "Android test build" --notes "Test builds of the Android app. Download the .apk on your phone to install it."
+          cp app.apk "$APK"
+          gh release view android-test >/dev/null 2>&1 || gh release create android-test --prerelease --title "Android test build" --notes "Test builds of the Android app."
           # keep only the newest APK on the release
           for a in $(gh release view android-test --json assets -q '.assets[].name'); do gh release delete-asset android-test "$a" -y; done
           gh release upload android-test "$APK"
-          gh release edit android-test --notes "Newest test build: version ${{ steps.ver.outputs.name }} (from commit ${GITHUB_SHA::7}). On your Android phone, download the .apk below and open it to install. You may need to allow installing apps from your browser."
+          if [ "$SIGNED" = yes ]; then KEYNOTE="Installing a newer test build updates the app and keeps your sessions."; else KEYNOTE="This build uses a temporary key: uninstall the previous test build before installing it."; fi
+          gh release edit android-test --notes "Newest test build: version ${{ steps.ver.outputs.name }} (from commit ${GITHUB_SHA::7}). On your Android phone, download the .apk below and open it to install. You may need to allow installing apps from your browser. $KEYNOTE"
+      - name: Publish a public release
+        if: github.event_name == 'workflow_dispatch' && inputs.release && env.SIGNED == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.ver.outputs.name }}
+          APK=DefaultAmbience-$V.apk
+          cp app.apk "$APK"
+          if gh release view "v$V" >/dev/null 2>&1; then gh release upload "v$V" "$APK" --clobber
+          else gh release create "v$V" "$APK" --latest --title "Default Ambience $V" --notes "Default Ambience for Android, version $V. Download DefaultAmbience-$V.apk on your Android phone and open it to install (you may need to allow installing apps from your browser). Or use it in your browser at https://teamoth.github.io/default-ambience/"; fi
