@@ -247,7 +247,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.15";
+const APP_VERSION="1.16";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -303,7 +303,8 @@ const FX = {
 };
 const base = {prob:100, pull:20, mode:"random", decay:0.5, harm:0.4, timb:0.5, morph:0.5, mdecay:0.5, colour:0.5,
   pan:0, dSend:0.2, rSend:0.3, ftype:"lowpass", cutoff:1, res:0.1, fenv:0, fdec:0.3,
-  envMode:"natural", A:0.01, D:0.3, S:0.6, R:0.4, gate:1, tails:"cut", swing:0};
+  envMode:"natural", A:0.01, D:0.3, S:0.6, R:0.4, gate:1, tails:"cut", swing:0,
+  midi:0, local:"on"};   // midi: channel 1-16 this orbit sends notes on (0 = off); local: play its own sound
 const newMod=()=>({target:"off", shape:"sine", rate:0.35, depth:0.5, seed:Math.random()*100});
 const tracks = [
   // A: a soft, airy high tone that fades in and out slowly
@@ -576,10 +577,82 @@ function triggerEnvelopes(t,time,gateDur){
   }
 }
 /* ================= scheduler ================= */
+/* ================= MIDI out =================
+   Each orbit can send its notes on a MIDI channel (Mix tab), to the output picked in Global.
+   Notes are timestamped to line up with the audio. Note-offs are kept here and sent a little ahead,
+   so a repeated note never gets cut by the previous one's note-off, and Stop can end everything cleanly. */
+const MIDI={access:null, out:null, state:"off", error:"", pending:[]};   // pending: [{time, ch, note}]
+const MIDI_PREF="default-ambience-midi-output";
+const midiSupported=()=>typeof navigator!=="undefined" && !!navigator.requestMIDIAccess;
+function midiStamp(time){   // audio-clock time -> the performance.now() clock MIDI uses
+  try{ const ts=ctx.getOutputTimestamp&&ctx.getOutputTimestamp();
+    if(ts&&ts.performanceTime>0) return ts.performanceTime+(time-ts.contextTime)*1000; }catch(e){}
+  return performance.now()+(time-ctx.currentTime+(ctx.outputLatency||ctx.baseLatency||0))*1000;
+}
+function midiSend(bytes,time){ if(!MIDI.out) return; try{ MIDI.out.send(bytes,time==null?undefined:Math.max(performance.now(),midiStamp(time))); }catch(e){} }
+function midiNote(ch,note,time,dur){
+  if(!MIDI.out) return;
+  note=Math.max(0,Math.min(127,Math.round(note))); const c=ch-1;
+  // a note-off for this same key still waiting? send it just before the new note instead
+  for(let i=MIDI.pending.length-1;i>=0;i--){ const q=MIDI.pending[i];
+    if(q.ch===c&&q.note===note){ midiSend([0x80|c,note,0],time-0.001); MIDI.pending.splice(i,1); } }
+  midiSend([0x90|c,note,100],time);
+  MIDI.pending.push({time:time+Math.max(0.02,dur*0.95),ch:c,note});
+}
+function midiFlush(until){
+  for(let i=MIDI.pending.length-1;i>=0;i--){ const q=MIDI.pending[i];
+    if(q.time<=until){ midiSend([0x80|q.ch,q.note,0],q.time); MIDI.pending.splice(i,1); } }
+}
+function midiAllOff(){
+  MIDI.pending.forEach(q=>midiSend([0x80|q.ch,q.note,0])); MIDI.pending.length=0;
+  // notes already queued in the output arrive within ~0.15 s, so the all-notes-off follows them
+  const chans=new Set(tracks.map(t=>t.midi).filter(Boolean));
+  setTimeout(()=>chans.forEach(ch=>{ midiSend([0xB0|(ch-1),123,0]); }),200);
+}
+function midiPickOutput(id){
+  if(MIDI.out&&MIDI.out.id!==String(id)) midiAllOff();
+  MIDI.out=id&&MIDI.access?MIDI.access.outputs.get(String(id))||null:null;
+  try{ if(MIDI.out) localStorage.setItem(MIDI_PREF,MIDI.out.name); else localStorage.removeItem(MIDI_PREF); }catch(e){}
+}
+async function midiEnable(){
+  if(!midiSupported()){ MIDI.state="unsupported"; return; }
+  MIDI.state="asking";
+  try{
+    MIDI.access=await navigator.requestMIDIAccess({sysex:false});
+    MIDI.state="on";
+    let want=null; try{ want=localStorage.getItem(MIDI_PREF); }catch(e){}
+    const outs=[...MIDI.access.outputs.values()];
+    const match=outs.find(o=>o.name===want)||(outs.length===1?outs[0]:null);
+    if(match) midiPickOutput(match.id);
+    MIDI.access.onstatechange=()=>{ if(MIDI.out&&MIDI.out.state==="disconnected") MIDI.out=null;
+      if(!MIDI.out&&want){ const o=[...MIDI.access.outputs.values()].find(o=>o.name===want&&o.state==="connected"); if(o) MIDI.out=o; }
+      if(sel==="global") renderGlobal(); };
+  }catch(e){ MIDI.state="denied"; MIDI.error=e&&e.name==="SecurityError"?"blocked":"failed"; }
+  if(typeof sel!=="undefined"&&sel==="global") renderGlobal();
+}
+// if MIDI was set up before, reconnect quietly on load
+try{ if(midiSupported()&&localStorage.getItem(MIDI_PREF)) midiEnable(); }catch(e){}
+function midiControls(){
+  const w=document.createElement("div"); w.className="full";
+  const add=el=>{ w.append(el); return el; };
+  if(!midiSupported()) add(hint("MIDI output: this browser can't send MIDI. Chrome or Edge on a computer or Android phone can."));
+  else if(MIDI.state==="on"){
+    const outs=[...MIDI.access.outputs.values()].filter(o=>o.state!=="disconnected");
+    if(!outs.length) add(hint("MIDI output: no MIDI devices found. Connect one (USB or Bluetooth) and it will appear here."));
+    else { const proxy={id:MIDI.out?MIDI.out.id:""};
+      add(choice(proxy,"id","MIDI output",[["","None"],...outs.map(o=>[o.id,o.name])],()=>{ midiPickOutput(proxy.id); renderGlobal(); })); }
+  } else {
+    const b=mkBtn(MIDI.state==="asking"?"Asking\u2026":"Turn on MIDI output"); b.onclick=midiEnable;
+    const row=document.createElement("div"); row.className="ctl"; const l=document.createElement("span"); l.className="label"; l.textContent="MIDI output"; row.append(l,b); add(row);
+    if(MIDI.state==="denied") add(hint(MIDI.error==="blocked"?"MIDI access was blocked. Allow it in the browser's site settings (in the preview here it isn't available; use the website).":"MIDI couldn't start in this browser."));
+  }
+  return w;
+}
 let soloIdx=-1;   // -1 = no solo; otherwise only that orbit plays (not saved with sessions)
 let playing=false, tick=0, nextTime=0, timer=null; const visQ=[];
 function schedule(){
   applyContinuousMods();
+  midiFlush(ctx.currentTime+0.12);
   while(nextTime<ctx.currentTime+0.12){
     const stepDur=60/G.bpm/4;
     tracks.forEach((t,ti)=>{
@@ -591,8 +664,9 @@ function schedule(){
         if(t.lock && t.notes[pos]!=null) d=t.notes[pos]; else { d=nextDegree(t); t.notes[pos]=d; }
         if(ti<G.orbits && !t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
           const m=degreeToMidi(t,d), gateDur=t.gate*stepDur; name=mname(m);
-          triggerEnvelopes(t,time,gateDur);
-          if(macroState==="ready"){
+          if(t.midi) midiNote(t.midi,m,time,gateDur);
+          if(t.local!=="off") triggerEnvelopes(t,time,gateDur);
+          if(macroState==="ready" && t.local!=="off"){
             const v=ti+(t.tails==="ring"?(t.alt^=1)*8:0);
             // gate and until (when an ADSR note's release has certainly finished) let the engine pick notes to cut if it runs short
             const adsr=t.envMode==="adsr", until=adsr?Math.max(gateDur,eff(t,"A",time))+eff(t,"R",time)*1.6+0.05:0;
@@ -624,6 +698,7 @@ async function start(){
 function stop(){
   playing=false; clearInterval(timer); visQ.length=0;
   if(macroNode) macroNode.port.postMessage({type:"clear"});
+  midiAllOff();
   tracks.forEach(t=>{t.pos=-1; if(t.envMode==="adsr"){t.vca.gain.cancelScheduledValues(ctx.currentTime); t.vca.gain.setTargetAtTime(0,ctx.currentTime,0.05);}});
   document.getElementById("playicon").setAttribute("d","M7 4l13 8-13 8z");
   document.getElementById("play").setAttribute("aria-label","Play");
@@ -876,7 +951,7 @@ function selectTab(s){
 }
 /* ---- the orbit menu: press and hold an orbit ----
    Copy / paste, swap, solo, randomise, gentle nudge, reset, and undo of the last change made here. */
-const ORBIT_COPY_SKIP=["mute"];     // muting is part of playing, not of the orbit's setup
+const ORBIT_COPY_SKIP=["mute","midi","local"];     // muting and MIDI routing are part of the setup around an orbit, not the orbit itself
 let orbitClip=null;                  // kept in memory, so it survives loading another session
 let orbitUndo=null;                  // {label, saved:[[index, settings], ...]}
 let swapFrom=null;
@@ -951,7 +1026,7 @@ const ROLLS={
   movement:["randomise movement",t=>rollMovement(t)],
   all:["randomise everything",t=>{rollRhythm(t);rollNotes(t);rollSound(t);rollMovement(t);rollMix(t);}],
   nudge:["nudge",t=>nudge(t)],
-  reset:["reset",t=>{ Object.assign(t,clone(base),{steps:16,hits:4,rot:0,voice:"m:8",oct:3,span:1,vol:0.6,lock:false,notes:[],mods:[newMod(),newMod()]}); }],
+  reset:["reset",t=>{ Object.assign(t,clone(base),{midi:t.midi,local:t.local,steps:16,hits:4,rot:0,voice:"m:8",oct:3,span:1,vol:0.6,lock:false,notes:[],mods:[newMod(),newMod()]}); }],
 };
 function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(tracks[i]); orbitChanged(i);
   const done={rhythm:"new rhythm",sound:"new sound",movement:"new movement",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
@@ -995,10 +1070,10 @@ const INFO={
   "Pattern":"Rhythm: Rotate shifts where the pattern starts (watch the orbit turn as you drag it), Hits is how many notes are spread evenly around the orbit, Steps is its length, Chance lets hits sometimes drop out, and Swing delays every other step for a looser feel. Notes: New melody picks fresh notes for this orbit, and Melody lock keeps repeating the current ones. Movement: Random can jump anywhere in the range, Walk moves a step or two from the last note. Root pull snaps some notes to the root. Octave and Range set where notes can fall. Tip: press and hold an orbit for copy, paste, swap, solo and randomise.",
   "Sound":"Voice type picks the sound; every type comes from open-source Eurorack DSP code. The first three controls are the module's harmonics, timbre and morph knobs, renamed for what they do on each type. Gate colour sets how much notes darken as they fade, and Decay how long they ring; struck types (strings, resonators, drums and six-op FM) shape their own fade, so these two are hidden for them. The filter then shapes the tone: Cutoff sets its frequency and Resonance emphasises it. Envelope amount sweeps the cutoff up (+) or down (−) on each note, settling back over the envelope decay time.",
   "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: two slow movers per orbit. Target picks the setting: any voice control (named for the current voice type), the filter, or the amp envelope. Voice controls keep moving while a note holds, and envelope settings change from one note to the next. Shape the movement (Random jumps, Drift glides), Rate the speed, and Depth how far it moves (negative moves the other way).",
-  "Mix":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right.",
+  "Mix":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right. MIDI channel sends this orbit's notes (with their gate length) to the MIDI output chosen in Global; turn Internal sound off to hear only the MIDI instrument. Mute silences both.",
   "Delay":"Every orbit feeds this delay through its Delay send (Mix tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
-  "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
+  "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
   "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
   "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there.",
 };
@@ -1130,7 +1205,11 @@ function renderVoice(t){
     });
   } else {
     page=pageGrid(slider(t,"dSend","Delay send",0,1,0.01,pct), slider(t,"rSend","Reverb send",0,1,0.01,pct),
-      full(slider(t,"pan","Pan",-1,1,0.01,v=>v===0?"Centre":(v<0?"L ":"R ")+Math.round(Math.abs(v)*100))));
+      full(slider(t,"pan","Pan",-1,1,0.01,v=>v===0?"Centre":(v<0?"L ":"R ")+Math.round(Math.abs(v)*100))),
+      sect("MIDI"),
+      choice(t,"midi","Channel",[[0,"Off"],...Array.from({length:16},(_,i)=>[i+1,"Channel "+(i+1)])],()=>{ midiAllOff(); rerender(); }),
+      seg(t,"local","Internal sound",[["on","On"],["off","Off"]]),
+      t.midi&&!MIDI.out?hint("Pick a MIDI output in Global to send these notes."):null);
   }
   const [vi,vbox]=infoToggle(voicePage); head.append(vi);
   panel.append(head,nav,vbox,page);
@@ -1179,6 +1258,7 @@ function renderGlobal(){
     scaleChoice(),
     full(seg(G,"orbits","Orbits",[["4","4"],["8","8"]],()=>{ G.orbits=+G.orbits; showOrbits(); applyParams(); })),
     (()=>{ const h=hint(engineStatsText()); h.id="enginestats"; return h; })(),
+    midiControls(),
     full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme))));
 }
 function renderMaster(){
