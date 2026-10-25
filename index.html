@@ -152,7 +152,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1 1 100%}   /* Level gets its own full-width row under i and Mute */
 .vhead .btn{flex:none;min-width:56px}
-.vhead .btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center}
+.btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center;flex:none}
 .vhead .oname{margin-left:auto;font-weight:600;font-size:var(--fs-ui);color:var(--acc);white-space:nowrap}
 @media (max-width:370px){ .vhead{column-gap:8px} .vhead .btn{min-width:0;padding-left:10px;padding-right:10px} .vhead .btn.dice{width:38px} .vhead .ow{display:none} .vhead .oname{font-size:1rem} }
 .pages{display:flex;gap:6px;flex:1;min-width:0}
@@ -263,7 +263,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.28";
+const APP_VERSION="1.29";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -1292,7 +1292,7 @@ function renderVoice(t){
   const solo=mk("Solo","Hear only this orbit"); solo.id="solobtn"; solo.setAttribute("aria-pressed",soloIdx===ti);
   solo.onclick=()=>toggleSolo(ti);
   const dice=mk("","Randomise this orbit"); dice.classList.add("dice"); dice.setAttribute("aria-label","Randomise");
-  dice.innerHTML='<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/></svg>';
+  dice.innerHTML=DICE_SVG;
   dice.onclick=()=>openOrbitMenu(ti,"random",dice);
   const oname=document.createElement("span"); oname.className="oname"; oname.innerHTML=`<span class="ow">Orbit </span>${ti+1}`; oname.setAttribute("aria-label","Orbit "+(ti+1));
   head.append(mute,solo,dice,oname,slider(t,"vol","Level",0,1,0.01,pct));
@@ -1460,6 +1460,19 @@ function copyText(text,status,selectEl){
   const fallback=()=>{ if(selectEl){selectEl.hidden=false; selectEl.value=text; selectEl.focus(); selectEl.select();} status.textContent="Selected. Use your phone's Copy."; };
   try{navigator.clipboard.writeText(text).then(done,fallback);}catch(e){fallback();}
 }
+/* ---- names for new sessions: a quiet adjective and a place or thing, e.g. "Pale Harbour" ---- */
+const NAME_A=["Slow","Pale","Distant","Hollow","Quiet","Drifting","Silver","Amber","Faded","Low","Soft","Still","Northern","Folded",
+  "Glass","Dusk","Velvet","Mossy","Salt","Winter","Paper","Late","Misty","Sunken","Warm","Cold","Gentle","Hidden","Open","Blue",
+  "Grey","Golden","Lantern","Tidal","Lunar","Wandering","Weightless","Echoing","Rusted","Wooden","Clouded","Dim","Morning","Evening","Patient"];
+const NAME_B=["Harbour","Orbit","Meadow","Tide","Signal","Lantern","Hollow","Shore","Field","Station","Garden","Current",
+  "Reservoir","Forest","Cathedral","Valley","River","Cloud","Window","Corridor","Echo","Satellite","Lighthouse","Pier","Fog","Frost",
+  "Ember","Glade","Canal","Ridge","Bloom","Drift","Hum","Weather","Moth","Heron","Lagoon","Archive","Observatory","Pasture","Estuary","Monastery","Platform"];
+function randomSessionName(){
+  const taken=new Set(loadSessions().map(it=>it.name.toLowerCase()));
+  for(let k=0;k<40;k++){ const a=pick(NAME_A), b=pick(NAME_B); if(a===b) continue; const n=a+" "+b; if(!taken.has(n.toLowerCase())) return n; }
+  return pick(NAME_A)+" "+pick(NAME_B)+" "+(loadSessions().length+1);
+}
+const DICE_SVG='<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/></svg>';
 function sessionsBody(){
   const wrap=document.createElement("div"); wrap.className="page";
   wrap.append(sectHead("Presets"));
@@ -1482,12 +1495,14 @@ function sessionsBody(){
   const save=document.createElement("div"); save.className="ctl full";
   save.innerHTML=`<label class="label" for="sessname">Save the current setup as</label>
     <div class="pickrow"><input id="sessname" type="text" maxlength="40"></div>`;
-  const nameIn=save.querySelector("input"); nameIn.value="Session "+(list.length+1);
-  const saveBtn=mkBtn("Save"); save.querySelector(".pickrow").append(saveBtn);
+  const nameIn=save.querySelector("input"); nameIn.value=randomSessionName();
+  const reName=mkBtn(""); reName.className="btn dice"; reName.innerHTML=DICE_SVG; reName.title="Another name"; reName.setAttribute("aria-label","Pick another name");
+  reName.onclick=()=>{ nameIn.value=randomSessionName(); };
+  const saveBtn=mkBtn("Save"); save.querySelector(".pickrow").append(reName,saveBtn);
   const status=document.createElement("p"); status.className="note full"; status.setAttribute("role","status");
   const SS=sessionsBody.saved||(sessionsBody.saved={i:0});
   saveBtn.onclick=()=>{
-    const name=nameIn.value.trim()||("Session "+(list.length+1));
+    const name=nameIn.value.trim()||randomSessionName();
     const l=loadSessions().slice(); l.unshift({name,saved:new Date().toISOString(),data:snapshot()});
     storeSessions(l); SS.i=0; renderSessions(); updateDials();
     const st=document.querySelector("#panel p.note.full[role=status]"); if(st) st.textContent=`Saved “${name}”`;
