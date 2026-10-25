@@ -27,6 +27,8 @@ class MacroOsc extends AudioWorkletProcessor {
     this.until = new Float64Array(NV);        // for ADSR notes: when the release has certainly finished
     this.level = new Float32Array(NV);        // recent peak level, for natural (self-fading) notes
     this.gain = new Float32Array(NV).fill(1); // fades a stolen voice out
+    this.vel = new Float32Array(NV).fill(1);  // loudness from the note's velocity (smoothed)
+    this.velTo = new Float32Array(NV).fill(1);
     this.stolen = new Uint8Array(NV);
     this.on = new Uint8Array(NV);             // currently sounding
     this.budget = 30; this.busy = 0; this.busyMs = 0; this.since = 0; this.steals = 0;
@@ -92,6 +94,7 @@ class MacroOsc extends AudioWorkletProcessor {
         this.gateEnd[d.v] = d.time + (d.gate || 0.2);
         this.until[d.v] = d.until ? d.time + d.until : 0;
         this.level[d.v] = 1; this.gain[d.v] = 1; this.stolen[d.v] = 0; this.on[d.v] = 1;
+        this.velTo[d.v] = d.vel ?? 1;
       }
       for (let v = 0; v < NV; v++) {
         if (!this.on[v]) continue;
@@ -100,12 +103,14 @@ class MacroOsc extends AudioWorkletProcessor {
         e.mo_render(v, CH);
         const buf = new Float32Array(e.memory.buffer, e.mo_buffer(v), CH);
         let pk = 0;
+        this.vel[v] += (this.velTo[v] - this.vel[v]) * 0.25;   // glide over ~1 ms so a new velocity never clicks
+        const g = this.vel[v];
         if (this.stolen[v]) {
-          for (let j = 0; j < CH; j++) { out[k + j] += buf[j] * this.gain[v]; }
+          for (let j = 0; j < CH; j++) { out[k + j] += buf[j] * g * this.gain[v]; }
           this.gain[v] = Math.max(0, this.gain[v] - fadeStep);
           if (this.gain[v] === 0) { this.on[v] = 0; this.lastTrig[v] = -1e9; }
         } else {
-          for (let j = 0; j < CH; j++) { const x = buf[j]; out[k + j] += x; const a = x < 0 ? -x : x; if (a > pk) pk = a; }
+          for (let j = 0; j < CH; j++) { const x = buf[j]; out[k + j] += x * g; const a = x < 0 ? -x : x; if (a > pk) pk = a; }
           this.level[v] = Math.max(pk, this.level[v] * 0.995);
         }
       }
