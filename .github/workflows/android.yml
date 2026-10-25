@@ -52,12 +52,15 @@ jobs:
         run: |
           cd android
           if [ -n "$KEY_B64" ]; then
-            ./gradlew assembleRelease --no-daemon
+            ./gradlew assembleRelease bundleRelease --no-daemon
             BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
             echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/key.p12"
             "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
             "$BT/apksigner" sign --ks "$RUNNER_TEMP/key.p12" --ks-pass env:KEY_PW --ks-key-alias defaultambience --key-pass env:KEY_PW --out ../app.apk "$RUNNER_TEMP/aligned.apk"
             "$BT/apksigner" verify ../app.apk
+            # the app bundle (.aab) is what the Play Store takes; it is signed with the same key (as the upload key)
+            jarsigner -keystore "$RUNNER_TEMP/key.p12" -storetype PKCS12 -storepass:env KEY_PW -keypass:env KEY_PW \
+              -signedjar ../app.aab app/build/outputs/bundle/release/app-release.aab defaultambience
             rm -f "$RUNNER_TEMP/key.p12"
             echo "SIGNED=yes" >> "$GITHUB_ENV"
           else
@@ -75,8 +78,9 @@ jobs:
           # keep only the newest APK on the release
           for a in $(gh release view android-test --json assets -q '.assets[].name'); do gh release delete-asset android-test "$a" -y; done
           gh release upload android-test "$APK"
+          if [ -f app.aab ]; then cp app.aab "DefaultAmbience-${{ steps.ver.outputs.name }}-play.aab"; gh release upload android-test "DefaultAmbience-${{ steps.ver.outputs.name }}-play.aab"; fi
           if [ "$SIGNED" = yes ]; then KEYNOTE="Installing a newer test build updates the app and keeps your sessions."; else KEYNOTE="This build uses a temporary key: uninstall the previous test build before installing it."; fi
-          gh release edit android-test --notes "Newest test build: version ${{ steps.ver.outputs.name }} (from commit ${GITHUB_SHA::7}). On your Android phone, download the .apk below and open it to install. You may need to allow installing apps from your browser. $KEYNOTE"
+          gh release edit android-test --notes "Newest test build: version ${{ steps.ver.outputs.name }} (from commit ${GITHUB_SHA::7}). On your Android phone, download the .apk below and open it to install. You may need to allow installing apps from your browser. $KEYNOTE (The .aab file is for uploading to Google Play, not for installing.)"
       - name: Publish a public release
         if: github.event_name == 'workflow_dispatch' && inputs.release && env.SIGNED == 'yes'
         env:

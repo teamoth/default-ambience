@@ -60,6 +60,15 @@ button:focus-visible,select:focus-visible,.sl:focus-visible{outline:2px solid va
 /* controls */
 .ctl{display:flex;flex-direction:column;gap:2px;min-width:0}
 .ctl .top{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.ctl .top .label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctl .val{display:flex;align-items:center;gap:6px;flex:none}
+.ctl .top:has(.val){align-items:center}
+.ctl .val output{min-width:6.5ch;text-align:center;line-height:1}
+.vhead .val output{min-width:4.5ch}
+@media (max-width:370px){ .vhead .val{gap:3px} .vhead .nb{width:26px} .vhead .btn{padding-left:8px;padding-right:8px} .vhead{gap:6px} }
+.nb{font:inherit;font-size:.95rem;line-height:1;width:30px;height:26px;padding:0;border-radius:7px;border:1px solid var(--line);
+  background:var(--raise);color:var(--fg);cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.nb:active{border-color:var(--acc,var(--t1))}
 .ctl output{font-family:var(--mono);font-size:.8rem;font-variant-numeric:tabular-nums;color:var(--fg)}
 .sl{position:relative;height:30px;margin:0 14px;touch-action:pan-y;cursor:ew-resize;user-select:none;-webkit-user-select:none;border-radius:6px}
 .sl .rail{position:absolute;left:0;right:0;top:13px;height:4px;border-radius:2px;background:var(--line)}
@@ -250,7 +259,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.23";
+const APP_VERSION="1.24";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -744,10 +753,11 @@ document.getElementById("play").addEventListener("click",()=>playing?stop():star
 /* ================= controls ================= */
 let uid=0;
 // Slider that only moves on a sideways drag (relative, so a tap never jumps it) and lets vertical swipes scroll the page.
+// − and + beside the value nudge it by one small step (hold to keep going); slider.plain=true leaves them out
 function slider(obj,key,label,min,max,step,fmt,onchange){
-  const id="sl"+(uid++);
+  const id="sl"+(uid++), plain=slider.plain; slider.plain=false;
   const w=document.createElement("div"); w.className="ctl";
-  w.innerHTML=`<div class="top"><span class="label" id="${id}-l">${label}</span><output></output></div>
+  w.innerHTML=`<div class="top"><span class="label" id="${id}-l">${label}</span>${plain?"<output></output>":`<span class="val"><button class="nb" aria-label="Lower ${label}">−</button><output></output><button class="nb" aria-label="Raise ${label}">+</button></span>`}</div>
     <div class="sl" id="${id}" role="slider" tabindex="0" aria-labelledby="${id}-l"><div class="rail"></div><div class="fill"></div><div class="knob"></div></div>`;
   const sl=w.querySelector(".sl"), fill=w.querySelector(".fill"), knob=w.querySelector(".knob"), out=w.querySelector("output");
   const draw=()=>{const v=obj[key], p=Math.max(0,Math.min(100,(v-min)/(max-min)*100));
@@ -774,6 +784,17 @@ function slider(obj,key,label,min,max,step,fmt,onchange){
     const k={ArrowRight:step,ArrowUp:step,ArrowLeft:-step,ArrowDown:-step,PageUp:big,PageDown:-big}[e.key];
     if(k!==undefined){e.preventDefault(); setV(obj[key]+k);}
     if(e.key==="Home"){e.preventDefault(); setV(min);} if(e.key==="End"){e.preventDefault(); setV(max);}});
+  if(!plain){
+    // one nudge: a single step, or 1% of the range when the steps are very fine
+    const n=(max-min)/step>100?Math.max(step,Math.round((max-min)/100/step)*step):step;
+    w.querySelectorAll(".nb").forEach((b,i)=>{
+      const d=i?n:-n; let hold=null, rep=null;
+      const go=()=>setV(obj[key]+d), stop=()=>{ clearTimeout(hold); clearInterval(rep); };
+      b.addEventListener("pointerdown",e=>{ e.preventDefault(); go(); hold=setTimeout(()=>{ rep=setInterval(go,70); },400); });
+      ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,stop));
+      b.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+    });
+  }
   draw(); LIVE.push({el:w,refresh:draw});
   w.set=v=>{blendHold(obj,key); obj[key]=v; draw();};
   w.setMax=m=>{max=m; if(obj[key]>max) obj[key]=max; draw();};
@@ -972,6 +993,7 @@ function updateBlendBar(){
   if(!BLEND.active) return;
   if(!blendSliderBuilt){
     blendSliderBuilt=true;
+    slider.plain=true;
     const sl=slider(BLEND,"pos","Blend",0,1,0.001,()=>"",()=>{ BLEND.running=false; applyBlend(); });
     document.getElementById("bslider").append(sl); BLEND.sliderEl=sl;
     document.getElementById("bpause").onclick=()=>{ if(BLEND.pos>=1){ BLEND.pos=0; } if(BLEND.dur>0) BLEND.running=!BLEND.running; BLEND.last=performance.now(); updateBlendBar(); };
@@ -1345,6 +1367,7 @@ function chooseTheme(){
 applyTheme();
 function tempoControl(){
   const row=document.createElement("div"); row.className="tempo";
+  slider.plain=true;   // tempo has its own larger − and +
   const sl=slider(G,"bpm","Tempo",10,500,1,v=>v+" bpm",updateDials);
   const nudge=(d,lbl)=>{
     const b=document.createElement("button"); b.className="btn nudge"; b.textContent=lbl; b.setAttribute("aria-label",(d<0?"Slower":"Faster")+" by 1 bpm");
