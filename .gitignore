@@ -1,2 +1,5 @@
 engine/eurorack/
 .DS_Store
+node_modules/
+www/
+android/

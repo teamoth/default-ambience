@@ -1,0 +1,15 @@
+{
+  "name": "default-ambience",
+  "private": true,
+  "description": "Default Ambience: a Euclidean sequencer for ambient music. This file is only used to build the Android app.",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "www": "python3 scripts/make-www.py"
+  },
+  "dependencies": {
+    "@capacitor/android": "latest",
+    "@capacitor/app": "latest",
+    "@capacitor/cli": "latest",
+    "@capacitor/core": "latest"
+  }
+}

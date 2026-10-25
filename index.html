@@ -237,6 +237,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
   <details class="credits">
     <summary>Credits and licences</summary>
     <p><strong>Default Ambience</strong> is free software: you can share and change it under the terms of the GNU General Public License, version 3. It comes with no warranty. The source code is at <a href="https://github.com/teamoth/default-ambience" target="_blank" rel="noopener">github.com/teamoth/default-ambience</a>.</p>
+    <p>Default Ambience is made by Timbient. It doesn't collect or track anything: see the <a href="https://teamoth.github.io/default-ambience/privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>
     <p>Default Ambience is an independent app. It is not made, endorsed or supported by the author of the code credited below.</p>
     <p><strong>Sound engine.</strong> The voices and the reverb in Default Ambience are compiled from open-source synthesiser code written by Emilie Gillet, published at <a href="https://github.com/pichenettes/eurorack" target="_blank" rel="noopener">github.com/pichenettes/eurorack</a> (including its stmlib support library). That code is included unmodified, with a small adapter so it can run in this app. It is used under the MIT License, reproduced below. In that licence, “the Software” means Emilie Gillet’s code, not Default Ambience as a whole.</p>
     <p>Copyright 2012–2021 Emilie Gillet.</p>
@@ -249,7 +250,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.19";
+const APP_VERSION="1.20";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -665,7 +666,8 @@ try{ if(midiSupported()&&localStorage.getItem(MIDI_PREF)) midiEnable(); }catch(e
 function midiControls(){
   const w=document.createElement("div"); w.className="full";
   const add=el=>{ w.append(el); return el; };
-  if(!midiSupported()) add(hint("MIDI output: this browser can't send MIDI. Chrome or Edge on a computer or Android phone can."));
+  if(!midiSupported()&&window.DA_APP) add(hint("MIDI output: coming to the Android app in a later version. For now, MIDI works on the website in Chrome."));
+  else if(!midiSupported()) add(hint("MIDI output: this browser can't send MIDI. Chrome or Edge on a computer or Android phone can."));
   else if(MIDI.state==="on"){
     const outs=[...MIDI.access.outputs.values()].filter(o=>o.state!=="disconnected");
     if(!outs.length) add(hint("MIDI output: no MIDI devices found. Connect one (USB or Bluetooth) and it will appear here."));
@@ -1518,6 +1520,19 @@ document.getElementById("appversion").textContent="Default Ambience \u00b7 versi
    The access key is public by design: it can only send messages to that inbox, and hCaptcha keeps bots out. */
 const FEEDBACK={key:"99f7be95-088b-49ac-a1e2-81d2666c06c5", endpoint:"https://api.web3forms.com/submit"};
 const ON_WEBSITE=!!window.DA_SITE;   // set by the website build; the Claude preview can't reach outside services
+/* ---- inside the Android app: the back gesture closes whatever is open, otherwise sends the app to the background
+   (rather than quitting it), so a stray swipe from the screen edge doesn't stop the music ---- */
+if(window.DA_APP){
+  const AppPlugin=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.App;
+  if(AppPlugin) AppPlugin.addListener("backButton",()=>{
+    const fb=document.getElementById("feedback"), om=document.getElementById("omenu"), mi=document.getElementById("maininfobox");
+    if(fb&&!fb.hidden){ closeFeedback(); return; }
+    if(om&&!om.hidden){ closeOrbitMenu(); return; }
+    if(swapFrom!==null){ endSwap(); return; }
+    if(mi&&!mi.hidden){ document.getElementById("maininfo").click(); return; }
+    AppPlugin.minimizeApp();
+  });
+}
 let captchaLoaded=false;
 function openFeedback(){
   const m=document.getElementById("feedback"), st=document.getElementById("fbstatus"), fields=document.getElementById("fbfields"), send=document.getElementById("fbsend");

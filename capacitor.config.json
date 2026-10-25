@@ -1,0 +1,9 @@
+{
+  "appId": "timbient.defaultambience",
+  "appName": "Default Ambience",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#13141d",
+    "adjustMarginsForEdgeToEdge": "auto"
+  }
+}
