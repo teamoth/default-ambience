@@ -43,6 +43,7 @@ jobs:
         id: ver
         run: |
           pip install --quiet pillow
+          python3 scripts/android-patch.py
           python3 scripts/android-icons.py
           python3 scripts/android-version.py
       - name: Build the APK
@@ -52,7 +53,8 @@ jobs:
         run: |
           cd android
           if [ -n "$KEY_B64" ]; then
-            ./gradlew assembleRelease bundleRelease --no-daemon
+            set -o pipefail
+            ./gradlew assembleRelease bundleRelease --no-daemon 2>&1 | tee ../gradle.log
             BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
             echo "$KEY_B64" | base64 -d > "$RUNNER_TEMP/key.p12"
             "$BT/zipalign" -f -p 4 app/build/outputs/apk/release/app-release-unsigned.apk "$RUNNER_TEMP/aligned.apk"
@@ -64,10 +66,20 @@ jobs:
             rm -f "$RUNNER_TEMP/key.p12"
             echo "SIGNED=yes" >> "$GITHUB_ENV"
           else
-            ./gradlew assembleDebug --no-daemon
+            set -o pipefail
+            ./gradlew assembleDebug --no-daemon 2>&1 | tee ../gradle.log
             cp app/build/outputs/apk/debug/app-debug.apk ../app.apk
             echo "SIGNED=no" >> "$GITHUB_ENV"
           fi
+      - name: Share the build log if it failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f gradle.log ] || exit 0
+          tail -c 200000 gradle.log > build-log.txt
+          gh release view android-test >/dev/null 2>&1 || gh release create android-test --prerelease --title "Android test build" --notes "Test builds of the Android app."
+          gh release upload android-test build-log.txt --clobber
       - name: Publish to the "Android test build" release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -76,7 +88,7 @@ jobs:
           cp app.apk "$APK"
           gh release view android-test >/dev/null 2>&1 || gh release create android-test --prerelease --title "Android test build" --notes "Test builds of the Android app."
           # keep only the newest APK on the release
-          for a in $(gh release view android-test --json assets -q '.assets[].name'); do gh release delete-asset android-test "$a" -y; done
+          for a in $(gh release view android-test --json assets -q '.assets[].name'); do gh release delete-asset android-test "$a" -y; done   # also clears an old build-log.txt
           gh release upload android-test "$APK"
           if [ -f app.aab ]; then cp app.aab "DefaultAmbience-${{ steps.ver.outputs.name }}-play.aab"; gh release upload android-test "DefaultAmbience-${{ steps.ver.outputs.name }}-play.aab"; fi
           if [ "$SIGNED" = yes ]; then KEYNOTE="Installing a newer test build updates the app and keeps your sessions."; else KEYNOTE="This build uses a temporary key: uninstall the previous test build before installing it."; fi
