@@ -22,7 +22,10 @@ Open the web app, tap play, and touch an orbit to change its settings. The **i**
 
 ## How it's built
 
-It's a single web page (`index.html`) plus the sound engine (`macro.wasm`, run by `macro-worklet.js` in the browser's audio thread). There is no build step for the page. To rebuild the sound engine from source, see `engine/build.sh`.
+- **`src/app.html`**: the whole app as one self-contained page (HTML, CSS and JavaScript). This is the file to edit.
+- **`scripts/build-site.py`**: turns it into the website page, `index.html`, adding the page head, the install manifest and offline support. Run `python3 scripts/build-site.py` after editing `src/app.html`, and commit both.
+- **`macro.wasm`** and **`macro-worklet.js`**: the sound engine, which runs in the browser's audio thread. To rebuild it from source, see `engine/build.sh`.
+- **Android app**: built with [Capacitor](https://capacitorjs.com/) by the GitHub Actions workflow in `.github/workflows/android.yml`, using the scripts in `scripts/`. Every change produces a test build on the "Android test build" release.
 
 ## Licence
 
