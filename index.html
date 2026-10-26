@@ -16,6 +16,8 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;font-size:14px}
 img{max-width:100%}
 [hidden]{display:none!important}
+/* a solid strip behind the phone's status bar, so the page doesn't scroll underneath the clock and icons */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg,#13141d);z-index:40;pointer-events:none}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -191,10 +193,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .tempo .ctl{flex:1}
 .nudge{flex:none;width:38px;padding:0;font-size:1rem;touch-action:manipulation}
 .modslot{padding:10px 0 12px 12px;margin-top:6px;border-left:3px solid var(--acc);border-radius:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 9%,transparent),transparent 70%)}
-.modslot.off{border-left-color:var(--line);background:none}
 .modslot .modhead{display:flex;align-items:center;gap:8px;font-size:var(--fs-ui);font-weight:600;margin-bottom:8px;min-width:0}
 .modslot .modnum{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;background:var(--acc);color:var(--panel)}
-.modslot.off .modnum{background:var(--line);color:var(--fg)}
 .modslot .modsum{margin-left:auto;font-weight:500;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .modslot.off .modsum{color:inherit;opacity:.6}
 .secthead{font-size:var(--fs-ui);font-weight:600;color:var(--acc);padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}
@@ -269,7 +269,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.30";
+const APP_VERSION="1.31";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
