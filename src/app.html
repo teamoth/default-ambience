@@ -100,12 +100,18 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 .btn.primary{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 
 /* rings */
+.topbar{display:flex;align-items:center;gap:8px;margin-bottom:-8px}
+.topbar .appname{margin-right:auto;font-size:var(--fs-ui);font-weight:600;opacity:.7}
+.btn.icon{min-width:0;width:40px;height:32px;padding:0;display:grid;place-items:center}
+.btn.icon:disabled{opacity:.35}
 .rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 -6px}
 .ring[hidden]{display:none}
 /* everything below lines up with the outer edges of the first and last orbit */
 .dials,.panel,.blendbar,#maininfobox{margin-left:-6px;margin-right:-6px}
 .ring{--acc:var(--t1);font:inherit;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:16px;
   padding:4px 1px 3px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0;border-radius:12px;min-width:0;transition:background .15s,border-color .15s}
+.ring{position:relative}
+.ring .onum{position:absolute;top:5px;left:8px;font-size:.72rem;font-weight:700;color:var(--acc);line-height:1}
 .ring canvas{width:100%;max-width:200px;aspect-ratio:1;height:auto}
 .ring .note{font-size:.7rem}
 .ring[aria-selected="true"]{background:var(--panel);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
@@ -135,6 +141,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1 1 100%}   /* Level gets its own full-width row under i and Mute */
 .vhead .btn{flex:none;min-width:56px}
+.btn.more{font-size:1.2rem;line-height:1}
 .btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center;flex:none}
 .vhead .oname{margin-left:auto;font-weight:600;font-size:var(--fs-ui);color:var(--acc);white-space:nowrap}
 @media (max-width:370px){ .vhead{column-gap:8px} .vhead .btn{min-width:0;padding-left:10px;padding-right:10px} .vhead .btn.dice{width:38px} .vhead .ow{display:none} .vhead .oname{font-size:1rem} }
@@ -153,6 +160,9 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .ifont{font-family:var(--mono);font-weight:600}
 .textlink{font:inherit;color:inherit;background:none;border:none;padding:0;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .infobox{margin:0;padding:10px 12px;border-radius:10px;background:var(--raise);color:var(--fg);font-size:var(--fs-ui);line-height:1.5}
+.infobox p{margin:0 0 6px}
+.infobox p:last-child{margin-bottom:0}
+.infobox strong{font-weight:600}
 .pages::-webkit-scrollbar{display:none}
 .pages button{font:inherit;font-size:var(--fs-ui);font-weight:500;color:var(--fg);background:var(--raise);border:1px solid var(--line);
   border-radius:8px;min-height:var(--h-ctl);padding:4px 6px;cursor:pointer;white-space:nowrap}
@@ -202,6 +212,9 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 </style>
 
 <div class="wrap">
+  <div class="topbar"><span class="appname">Default Ambience</span>
+    <button class="btn icon" id="undobtn" aria-label="Undo" title="Undo" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button class="btn icon" id="redobtn" aria-label="Redo" title="Redo" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <section class="rings" id="rings" role="tablist" aria-label="Orbits"></section>
   <section class="blendbar" id="blendbar" aria-label="Blend" hidden>
     <div class="bnames"><span id="bfrom"></span><span id="bto"></span></div>
@@ -249,7 +262,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.32";
+const APP_VERSION="1.33";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -458,9 +471,10 @@ function initAudio(){
 let enginesReady=null;
 let ENGINE_STATS=null;
 function engineStatsText(){
-  const s=ENGINE_STATS; if(!s) return "Sound engine: starts when you press Play.";
-  return "Sound engine: "+s.voices+(s.voices===1?" voice":" voices")+" playing, "+Math.round(s.load*100)+"% busy"+
-    (s.steals?", "+s.steals+(s.steals===1?" note":" notes")+" cut short so far.":".");
+  const s=ENGINE_STATS; if(!s) return "Sound engine load: shown while playing.";
+  const pc=Math.round(s.load*100), word=pc<25?"low":pc<50?"moderate":pc<75?"high":"very high";
+  return "Sound engine load: "+word+" ("+pc+"%), "+s.voices+(s.voices===1?" voice":" voices")+" playing."+
+    (s.steals?" "+s.steals+(s.steals===1?" note was":" notes were")+" shortened to keep the sound smooth.":"");
 }
 async function loadEngines(){
   macroState="loading"; setStatus("Loading sound engines…");
@@ -682,11 +696,22 @@ function midiControls(){
   return w;
 }
 let soloIdx=-1;   // -1 = no solo; otherwise only that orbit plays (not saved with sessions)
+// Notes are scheduled a little ahead of time. When the page can't be seen (screen off, app in the background)
+// the browser only wakes the scheduler about once a second, so it looks further ahead then.
+const lookAhead=()=>document.hidden?1.6:0.12;
+/* ---- calling the Android app's own code (only inside the app) ---- */
+function nativeCall(plugin,method,opts){
+  const C=window.Capacitor; if(!window.DA_APP||!C) return Promise.reject(new Error("not in the app"));
+  if(C.Plugins&&C.Plugins[plugin]&&typeof C.Plugins[plugin][method]==="function") return C.Plugins[plugin][method](opts||{});
+  if(typeof C.nativePromise==="function") return C.nativePromise(plugin,method,opts||{});
+  return Promise.reject(new Error("no bridge"));
+}
+window.daNativeStop=()=>{ if(playing) stop(); };   // the notification's Stop button
 let playing=false, tick=0, nextTime=0, timer=null; const visQ=[];
 function schedule(){
   applyContinuousMods();
-  midiFlush(ctx.currentTime+0.12);
-  while(nextTime<ctx.currentTime+0.12){
+  midiFlush(ctx.currentTime+lookAhead());
+  while(nextTime<ctx.currentTime+lookAhead()){
     const stepDur=60/G.bpm/4;
     tracks.forEach((t,ti)=>{
       const time=nextTime+((tick%2===1)?stepDur*t.swing/100*0.5:0);
@@ -727,12 +752,14 @@ async function start(){
   document.getElementById("play").removeAttribute("aria-busy");
   playing=true; tick=0; nextTime=ctx.currentTime+0.06;
   timer=setInterval(schedule,25); schedule();
+  nativeCall("Background","start").catch(()=>{});   // Android app: keep playing in the background
   document.getElementById("playicon").setAttribute("d","M6 5h4v14H6zM14 5h4v14h-4z");
   document.getElementById("play").setAttribute("aria-label","Stop");
   try{navigator.wakeLock&&navigator.wakeLock.request("screen").catch(()=>{});}catch(e){}
 }
 function stop(){
   playing=false; clearInterval(timer); visQ.length=0;
+  nativeCall("Background","stop").catch(()=>{});
   if(macroNode) macroNode.port.postMessage({type:"clear"});
   midiAllOff();
   tracks.forEach(t=>{t.pos=-1; if(t.envMode==="adsr"){t.vca.gain.cancelScheduledValues(ctx.currentTime); t.vca.gain.setTargetAtTime(0,ctx.currentTime,0.05);}});
@@ -753,7 +780,7 @@ function alignSoon(){ if(alignQueued) return; alignQueued=true;
     const w=Math.max(0,...outs.map(o=>+o.dataset.w)); outs.forEach(o=>{ o.style.minWidth=w+"ch"; }); }); }
 // − and + beside the value nudge it by one small step (hold to keep going); slider.plain=true leaves them out
 function slider(obj,key,label,min,max,step,fmt,onchange){
-  const id="sl"+(uid++), plain=slider.plain; slider.plain=false;
+  const id="sl"+(uid++), plain=slider.plain, custom=slider.custom; slider.plain=false; slider.custom=null;
   const w=document.createElement("div"); w.className="ctl";
   w.innerHTML=`<div class="top"><span class="label" id="${id}-l">${label}</span>${plain?"<output></output>":`<span class="val"><button class="nb" aria-label="Lower ${label}">−</button><output></output><button class="nb" aria-label="Raise ${label}">+</button></span>`}</div>
     <div class="sl" id="${id}" role="slider" tabindex="0" aria-labelledby="${id}-l"><div class="rail"></div><div class="fill"></div><div class="knob"></div></div>`;
@@ -790,11 +817,13 @@ function slider(obj,key,label,min,max,step,fmt,onchange){
     let widest=0; const count=Math.round((max-min)/step), every=Math.max(1,Math.floor(count/400));
     for(let i=0;i<=count;i+=every){ try{ widest=Math.max(widest,String(fmt(+(min+i*step).toFixed(4))).length); }catch(e){} }
     try{ widest=Math.max(widest,String(fmt(max)).length); }catch(e){}
+    if(custom&&custom.widest) widest=custom.widest;
     out.style.minWidth=widest+"ch"; out.dataset.w=widest;
     alignSoon();
     w.querySelectorAll(".nb").forEach((b,i)=>{
       const d=i?n:-n; let hold=null, rep=null;
-      const go=()=>setV(obj[key]+d), stop=()=>{ clearTimeout(hold); clearInterval(rep); };
+      const go=custom&&custom.nudge?()=>{ custom.nudge(i?1:-1); draw(); onchange&&onchange(); applyParams(); }:()=>setV(obj[key]+d),
+            stop=()=>{ clearTimeout(hold); clearInterval(rep); };
       b.addEventListener("pointerdown",e=>{ e.preventDefault(); go(); hold=setTimeout(()=>{ rep=setInterval(go,70); },400); });
       ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,stop));
       b.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
@@ -957,6 +986,7 @@ const BLEND={active:false, pos:0, from:null, to:null, fromName:"", toName:"", du
 const orbitPoint=i=>(i+1)/((G.orbits||4)+1);   // with 4 orbits: 20%, 40%, 60%, 80%; with 8, every 11%
 function pathOf(obj,key){
   if(obj===G) return "G."+key;
+  if(obj&&obj.holdsG) return "G."+obj.holdsG;
   if(obj===FX) return "FX."+key;
   if(obj&&obj.holds) return "FX."+obj.holds;
   const ti=tracks.indexOf(obj); if(ti>=0) return "T"+ti+"."+key;
@@ -1048,7 +1078,7 @@ function restore(snap){
 tracks.forEach((t,ti)=>{
   const r=document.createElement("button"); r.className="ring"; r.setAttribute("role","tab");
   r.style.setProperty("--acc",`var(${t.color})`);
-  r.setAttribute("aria-label","Orbit "+t.name); r.innerHTML=`<canvas width="320" height="320" aria-hidden="true"></canvas><span class="note"><span class="nn">–</span></span>`;
+  r.setAttribute("aria-label","Orbit "+(ti+1)); r.innerHTML=`<span class="onum" aria-hidden="true">${ti+1}</span><canvas width="320" height="320" aria-hidden="true"></canvas><span class="note"><span class="nn">–</span></span>`;
   r.onclick=()=>{ if(r.dataset.held){ delete r.dataset.held; return; }
     if(swapFrom!==null){ const f=swapFrom; endSwap(); if(f!==ti) swapOrbits(f,ti); return; }
     selectTab(ti); };
@@ -1108,7 +1138,7 @@ function orbitChanged(...idx){
   applyParams(); updateDials(); if(idx.includes(sel)) selectTab(sel);
 }
 function copyOrbit(i){ orbitClip={from:i, data:orbitData(i,ORBIT_COPY_SKIP)}; toast("Orbit "+(i+1)+" copied"); }
-function pasteOrbit(i){ if(!orbitClip) return; remember("paste",i); setOrbit(i,orbitClip.data); orbitChanged(i); toast("Pasted onto orbit "+(i+1)); }
+function pasteOrbit(i){ if(!orbitClip) return; remember("paste",i); setOrbit(i,orbitClip.data); orbitChanged(i); toast("Pasted onto orbit "+(i+1)+". Use the undo arrow to go back."); }
 function swapOrbits(a,b){ remember("swap",a,b); const da=orbitData(a), db=orbitData(b); setOrbit(a,db); setOrbit(b,da); orbitChanged(a,b);
   if(soloIdx===a) soloIdx=b; else if(soloIdx===b) soloIdx=a; updateSolo(); toast("Orbits "+(a+1)+" and "+(b+1)+" swapped"); }
 function startSwap(i){ swapFrom=i; tracks[i].ringEl.classList.add("swapsrc"); toast("Tap the orbit to swap with"); }
@@ -1120,8 +1150,6 @@ function toggleSolo(i){ soloIdx=soloIdx===i?-1:i;
     const mb=document.getElementById("mutebtn"); if(mb&&sel===i) mb.setAttribute("aria-pressed","false"); }
   updateSolo(); toast(soloIdx<0?"Solo off":"Only orbit "+(i+1)+" is playing");
   const sb=document.getElementById("solobtn"); if(sb) sb.setAttribute("aria-pressed",soloIdx===sel); }
-function undoOrbit(){ if(!orbitUndo) return; const u=orbitUndo; orbitUndo=null;
-  u.saved.forEach(([i,d])=>setOrbit(i,d)); orbitChanged(...u.saved.map(([i])=>i)); toast("Undone"); }
 
 /* randomising keeps to ranges that sound good: no inaudible filters, no volume jumps */
 const R=(a,b)=>a+Math.random()*(b-a), RI=(a,b)=>Math.floor(R(a,b+1)), pick=a=>a[Math.floor(Math.random()*a.length)];
@@ -1173,22 +1201,19 @@ const ROLLS={
 };
 function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(tracks[i]); orbitChanged(i);
   const done={sound:"new sound",pattern:"new pattern",motion:"new motion",mix:"new mix",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
-  toast("Orbit "+(i+1)+": "+done+(kind==="reset"?". Undo is in its hold menu.":". Undo is under the dice.")); }
+  toast("Orbit "+(i+1)+": "+done+". Use the undo arrow to go back."); }
 
 /* ---- randomise the whole session (Global's dice): every shown orbit, the key, tempo and effects ----
    Levels, mutes, MIDI routing, master volume and the number of orbits stay as they are. */
-let globalUndo=null;
 function randomiseAll(){
-  globalUndo=snapshot();
   G.bpm=Math.round(R(40,110)); G.root=RI(0,11); G.scale=pick(Object.keys(SCALES));
   FX.dMode=chance(0.6)?"sync":"free"; FX.dDiv=pick(DIVS)[0]; FX.dFree=+R(0.2,1.5).toFixed(3);
   FX.dFb=R(0.3,0.75); FX.dTone=R(0.1,0.6); FX.dRet=R(0.2,0.6);
   FX.rTime=R(0.7,0.98); FX.rDamp=R(0.1,0.7); FX.rPre=R(0,0.2); FX.rRet=R(0.6,1);
   const idx=[]; for(let i=0;i<G.orbits;i++){ ROLLS.all[1](tracks[i]); idx.push(i); }
   orbitChanged(...idx); applyParams(); updateDials(); selectTab(sel);
-  toast("Everything randomised. Undo is under the dice in Global.");
+  toast("Everything randomised. Use the undo arrow to go back.");
 }
-function undoGlobal(){ if(!globalUndo) return; const s=globalUndo; globalUndo=null; const keepSel=sel; restore(s); selectTab(keepSel); toast("Undone"); }
 function openGlobalRandom(anchor){
   let m=document.getElementById("omenu");
   if(!m){ openOrbitMenu(0); m=document.getElementById("omenu"); }
@@ -1197,8 +1222,7 @@ function openGlobalRandom(anchor){
     b.onclick=()=>{ closeOrbitMenu(); fn&&fn(); }; return b; };
   const head=document.createElement("div"); head.className="ohead"; head.textContent="Randomise everything";
   const note=document.createElement("div"); note.className="osub"; note.textContent="Every orbit's sound, pattern, motion and mix, plus tempo, key and effects. Levels, mutes and MIDI stay as they are.";
-  const row=document.createElement("div"); row.className="orow"; row.append(mkI("Undo",undoGlobal,!globalUndo),mkI("Cancel"));
-  m.append(head,note,mkI("Randomise everything",randomiseAll),row);
+  m.append(head,note,mkI("Randomise everything",randomiseAll),mkI("Cancel"));
   m.hidden=false;
   const rr=anchor.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight, vw=document.documentElement.clientWidth, vh=window.innerHeight;
   m.style.left=Math.max(16,Math.min(vw-w-16,rr.right-w))+"px";
@@ -1218,21 +1242,16 @@ function openOrbitMenu(i,mode,anchor){
     if(label) b.setAttribute("aria-label",label); b.disabled=!!dis; b.onclick=()=>{ closeOrbitMenu(); fn&&fn(); }; return b; };
   const row=(...els)=>{ const r=div("orow"); r.append(...els); return r; };
   const canPaste=orbitClip&&orbitClip.from!==i;
-  const solo=item(soloIdx===i?"End solo":"Solo",()=>toggleSolo(i)); solo.setAttribute("aria-pressed",soloIdx===i);
   const randomRows=()=>[
     row(item("Sound",()=>rollOrbit(i,"sound"),false,"Randomise sound"), item("Pattern",()=>rollOrbit(i,"pattern"),false,"Randomise pattern")),
     row(item("Motion",()=>rollOrbit(i,"motion"),false,"Randomise motion"), item("Mix",()=>rollOrbit(i,"mix"),false,"Randomise mix")),
     item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything"),
     item("Nudge gently",()=>rollOrbit(i,"nudge"))];
-  if(mode==="random") m.append(div("ohead","Randomise orbit "+(i+1)),...randomRows(),div("osub",""),
-    row(item("Undo",undoOrbit,!orbitUndo,orbitUndo?"Undo "+orbitUndo.label:"Nothing to undo"),item("Cancel")));
+  if(mode==="random") m.append(div("ohead","Randomise orbit "+(i+1)),...randomRows(),item("Cancel"));
   else m.append(div("ohead","Orbit "+(i+1)),
     row(item("Copy",()=>copyOrbit(i),false,"Copy settings"),
         item(canPaste?"Paste "+(orbitClip.from+1):"Paste",()=>pasteOrbit(i),!canPaste,canPaste?"Paste orbit "+(orbitClip.from+1)+"'s settings":"Paste (copy an orbit first)")),
-    row(item("Swap with…",()=>startSwap(i)), solo),
-    div("osub",""),
-    row(item("Reset",()=>rollOrbit(i,"reset"),false,"Reset to a plain sound"),
-        item("Undo",undoOrbit,!orbitUndo,orbitUndo?"Undo "+orbitUndo.label:"Nothing to undo")),
+    row(item("Swap with…",()=>startSwap(i)), item("Reset",()=>rollOrbit(i,"reset"),false,"Reset to a plain sound")),
     item("Cancel"));
   m.hidden=false;
   const rr=(anchor||tracks[i].ringEl).getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight,
@@ -1242,24 +1261,87 @@ function openOrbitMenu(i,mode,anchor){
   if(navigator.vibrate) try{ navigator.vibrate(15); }catch(e){}
   setTimeout(()=>document.addEventListener("pointerdown",outsideMenu,true),0);
 }
+// Help for each page: one short line per control ("Name: what it does"), shown by the i button.
 const INFO={
-  "Pattern":"Rhythm: Rotate shifts where the pattern starts (watch the orbit turn as you drag it), Hits is how many notes are spread evenly around the orbit, Steps is its length, Chance lets hits sometimes drop out, Velocity sets how hard each hit plays (1–127, as in MIDI: it changes the loudness of the orbit's own sound and is sent with its MIDI notes; 100 is normal), and Swing delays every other step for a looser feel. Notes: New melody picks fresh notes for this orbit, and Melody lock keeps repeating the current ones. Movement: Random can jump anywhere in the range, Walk moves a step or two from the last note. Root pull snaps some notes to the root. Octave and Range set where notes can fall. Tip: press and hold an orbit for copy, paste, swap and solo; the dice at the top randomises it.",
-  "Sound":"Voice type picks the sound; every type comes from open-source Eurorack DSP code. The first three controls are the module's harmonics, timbre and morph knobs, renamed for what they do on each type. Gate colour sets how much notes darken as they fade, and Decay how long they ring; struck types (strings, resonators, drums and six-op FM) shape their own fade, so these two are hidden for them. The filter then shapes the tone: Cutoff sets its frequency and Resonance emphasises it. Envelope amount sweeps the cutoff up (+) or down (−) on each note, settling back over the envelope decay time.",
-  "Motion":"How the sound moves, note by note and over time. Envelope: Natural lets each note fade using the voice's own decay; ADSR shapes the volume instead (Attack, then Decay down to the Sustain level, then Release once the gate ends; Gate length is how many steps each note is held). Struck types (modal resonator, inharmonic string, six-op FM and the drums) have their strike built in, so a long attack fades them in but can't make them swell like a pad. Note tails: Cut off stops a note when the next one starts; Let ring lets two notes overlap, using a little more processing. Modulation: four movers per orbit. Source picks what moves it: LFO is a slow wave (Shape and Rate); Random per hit picks a new value on every note; Pattern position rises over each time round the orbit's loop; Note pitch follows how high each note is. Target picks the setting: velocity, any voice control (named for the current voice type), the filter, the amp envelope, or pan. Voice controls keep moving while a note holds, and envelope settings change from one note to the next. For an LFO, Shape is the movement (Random jumps, Drift glides) and Rate the speed. Depth is how far it moves (negative moves the other way).",
-  "Mix + MIDI":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right. Channel sends this orbit's notes (with their gate length) to the MIDI output chosen in Global; turn Internal sound off to hear only the MIDI instrument. Mute silences both.",
-  "Delay":"Every orbit feeds this delay through its Delay send (Mix + MIDI tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
-  "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
-  "Global":"The dice randomises everything: every orbit's sound, pattern, motion and mix, plus tempo, key, scale and the delay and reverb (levels, mutes and MIDI stay as they are); Undo is in the same menu. Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix + MIDI tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
-  "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
-  "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there. Copy all sessions makes a single backup of every saved session (with their names), and Save backup file saves the same thing as a file (in the app, choose where it goes, such as Drive or email). To add them all back, for example after reinstalling the app, paste the backup and press Load code, or use Load from file. Codes are compact, so they fit in notes and messages. Names that are already taken get a number, so nothing is overwritten.",
+  "Sound":[
+    "Voice type: the kind of sound. Every type comes from open-source Eurorack synthesiser code.",
+    "The next three controls: the voice's main controls, named for what they do on each type.",
+    "Gate colour: how much notes darken as they fade.",
+    "Decay: how long notes ring (with the Natural envelope).",
+    "Struck types (strings, resonators, drums, six-op FM) shape their own fade, so Gate colour and Decay are hidden for them.",
+    "Filter type, Cutoff, Resonance: shape the tone.",
+    "Envelope amount: sweeps the cutoff up (+) or down (−) on each note.",
+    "Envelope decay: how quickly that sweep settles back."],
+  "Pattern":[
+    "Rotate: where the pattern starts. Watch the orbit turn as you drag it.",
+    "Hits: how many notes, spread evenly around the orbit.",
+    "Steps: the orbit's length.",
+    "Chance: how often a hit actually plays.",
+    "Velocity: how hard each hit plays, 1–127 as in MIDI (100 is normal). Also sent with MIDI notes.",
+    "Swing: delays every other step for a looser feel.",
+    "New melody: picks fresh notes.",
+    "Melody lock: keeps repeating the current notes.",
+    "Movement: Random can jump anywhere in the range; Walk moves a step or two at a time.",
+    "Root pull: how often notes land on the root.",
+    "Octave, Range: where the notes sit and how far they spread."],
+  "Motion":[
+    "Amp envelope: Natural lets each note fade by itself; ADSR shapes the volume.",
+    "Attack, Decay, Sustain, Release: fade in, fall to the sustain level, hold, then fade out.",
+    "Gate length: how many steps each note is held.",
+    "Note tails: Cut off stops a note when the next one starts; Let ring lets them overlap.",
+    "Struck types have their strike built in: a long attack fades them in but can't make them swell.",
+    "Modulators: four per orbit, each moving one setting.",
+    "Source: LFO (a slow wave, with Shape and Rate), Random per hit, Pattern position (rises through each loop) or Note pitch.",
+    "Target: the setting it moves: velocity, a voice control, the filter, the envelope or pan.",
+    "Depth: how far it moves. Negative moves the other way."],
+  "Mix + MIDI":[
+    "Delay send, Reverb send: how much goes to the shared delay and reverb (adjusted in Master).",
+    "Pan: left or right.",
+    "Channel: sends this orbit's notes to the MIDI output chosen in Global.",
+    "Internal sound: turn off to hear only the MIDI instrument.",
+    "Mute silences both the sound and the MIDI notes."],
+  "Delay":[
+    "Every orbit feeds this delay through its Delay send (Mix + MIDI tab).",
+    "Timing: Tempo synced follows the tempo; Free sets the time in milliseconds.",
+    "Time: the gap between echoes.",
+    "Level: how loud the echoes are.",
+    "Repeats: how many echoes you hear.",
+    "Tone: how dark the echoes get."],
+  "Reverb":[
+    "Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab).",
+    "Level: how loud the reverb is.",
+    "Decay time: the length of the tail.",
+    "Damping: darkens the tail.",
+    "Pre-delay: a short gap before the reverb starts."],
+  "Global":[
+    "Dice: randomises everything: every orbit, tempo, key and effects. Levels, mutes and MIDI stay as they are.",
+    "Tempo: speed for every orbit.",
+    "Root, Scale: which notes every orbit can play.",
+    "Orbits: one row of 4, or two rows of 8. Orbits 5–8 are saved with the session.",
+    "Sound engine load: how hard the phone is working. If it gets too busy, a fading or old note is shortened to keep the sound smooth.",
+    "MIDI output: where orbits with a MIDI channel send their notes (Chrome or Edge; the browser asks permission the first time).",
+    "Theme: dark or light."],
+  "Blend":[
+    "Moves from one session to another. Levels, filters and tempo glide; choices like voice type and rhythm switch partway, one orbit at a time.",
+    "Drift time: let it move by itself while playing, or drag the bar under the orbits by hand.",
+    "Touching a control during a blend keeps that setting where you put it.",
+    "The cross on the bar ends the blend and keeps the sound as it is."],
+  "Session":[
+    "Presets: built in and always available.",
+    "Save: keeps everything, including locked melodies, on this device. The dice suggests another name.",
+    "Load, Rename, Save over, Delete: for the saved session chosen in the list.",
+    "Loading replaces the current setup (the undo arrow brings it back).",
+    "Copy current as code: a code to send to a friend or another device. Paste one here and press Load code.",
+    "Copy all sessions, Save backup file: one backup of every saved session. Load it back with Load code or Load from file; names already taken get a number."],
 };
 const MAIN_INFO=[
   "**Welcome! This is Default Ambience.**",
   "Some info about what's going on here:",
   "Each of the circular 'orbits' is a looping rhythm. There are 4 to start with; Global can switch to 8, in two rows. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
+  "The arrows at the top undo and redo any change, back up to 100 steps.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Sound (voice and filter), Pattern (rhythm and notes), Motion (envelope and modulation) and Mix + MIDI (sends, pan and MIDI channel).",
-  "Press and hold an orbit (or right-click it on a computer) for its menu. Copy and Paste move all of an orbit's settings (except Mute) to another orbit, even after loading a different session. Swap with… exchanges two orbits, and Solo lets you hear one on its own. Reset gives a plain starting sound, and Undo takes back the last change made from the menu. Randomise is on the dice button at the top of each orbit's panel, next to Mute and Solo.",
+  "At the top of each orbit's panel: Mute, Solo, the dice (randomise) and ⋯ (copy, paste, swap with another orbit, or reset). Pressing and holding an orbit opens the same ⋯ menu. Copied settings survive loading another session.",
   "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale, number of orbits (4 or 8) and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
   "The [i] button on each page explains its controls.",
   "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by Emilie Gillet (see [credits] at bottom of page).",
@@ -1283,7 +1365,11 @@ const MAIN_INFO=[
   b.onclick=()=>{ box.hidden=!box.hidden; b.setAttribute("aria-expanded",!box.hidden); }; }function infoToggle(key){
   const b=document.createElement("button"); b.className="info"; b.textContent="i";
   b.setAttribute("aria-label","About "+key); b.setAttribute("aria-expanded","false");
-  const box=document.createElement("p"); box.className="infobox"; box.textContent=INFO[key]||""; box.hidden=true;
+  const box=document.createElement("div"); box.className="infobox"; box.hidden=true;
+  [].concat(INFO[key]||[]).forEach(line=>{   // "Name: what it does" shows the name in bold
+    const p=document.createElement("p"), m=/^([^:]{1,40}): (.*)$/.exec(line);
+    if(m){ const k=document.createElement("strong"); k.textContent=m[1]+": "; p.append(k,m[2]); } else p.textContent=line;
+    box.append(p); });
   b.onclick=()=>{box.hidden=!box.hidden; b.setAttribute("aria-expanded",!box.hidden);};
   return [b,box];
 }
@@ -1321,8 +1407,10 @@ function renderVoice(t){
   const dice=mk("","Randomise this orbit"); dice.classList.add("dice"); dice.setAttribute("aria-label","Randomise");
   dice.innerHTML=DICE_SVG;
   dice.onclick=()=>openOrbitMenu(ti,"random",dice);
+  const more=mk("\u22EF","Copy, paste, swap or reset this orbit"); more.classList.add("dice","more"); more.setAttribute("aria-label","More: copy, paste, swap, reset");
+  more.onclick=()=>openOrbitMenu(ti,undefined,more);
   const oname=document.createElement("span"); oname.className="oname"; oname.innerHTML=`<span class="ow">Orbit </span>${ti+1}`; oname.setAttribute("aria-label","Orbit "+(ti+1));
-  head.append(mute,solo,dice,oname,slider(t,"vol","Level",0,1,0.01,pct));
+  head.append(mute,solo,dice,more,oname,slider(t,"vol","Level",0,1,0.01,pct));
 
   const pages=["Sound","Pattern","Motion","Mix + MIDI"];
   if(!pages.includes(voicePage)) voicePage=pages[0];
@@ -1430,9 +1518,15 @@ function chooseTheme(){
   applyTheme();
 }
 applyTheme();
+// the tempo slider gives most of its travel to 40–120 bpm, where ambient music lives; the ends still reach 10 and 500
+const BPM_MAP=[[0,10],[0.12,40],[0.88,120],[1,500]];
+function bpmFromP(p){ for(let i=1;i<BPM_MAP.length;i++){ const [p1,b1]=BPM_MAP[i], [p0,b0]=BPM_MAP[i-1]; if(p<=p1) return b0+(b1-b0)*(p-p0)/(p1-p0); } return 500; }
+function pFromBpm(b){ for(let i=1;i<BPM_MAP.length;i++){ const [p1,b1]=BPM_MAP[i], [p0,b0]=BPM_MAP[i-1]; if(b<=b1) return p0+(p1-p0)*(b-b0)/(b1-b0); } return 1; }
 function tempoControl(){
   const row=document.createElement("div"); row.className="tempo";
-  row.append(slider(G,"bpm","Tempo",10,500,1,v=>v+" bpm",updateDials));
+  const proxy={holdsG:"bpm", get p(){ return pFromBpm(G.bpm); }, set p(v){ G.bpm=Math.max(10,Math.min(500,Math.round(bpmFromP(v)))); }};
+  slider.custom={nudge:d=>{ blendHold(G,"bpm"); G.bpm=Math.max(10,Math.min(500,G.bpm+d)); }, widest:7};
+  row.append(slider(proxy,"p","Tempo",0,1,0.001,()=>G.bpm+" bpm",updateDials));
   return row;
 }
 function renderGlobal(){
@@ -1447,6 +1541,10 @@ function renderGlobal(){
     full(seg(G,"orbits","Orbits",[["4","4"],["8","8"]],()=>{ G.orbits=+G.orbits; showOrbits(); applyParams(); })),
     (()=>{ const h=hint(engineStatsText()); h.id="enginestats"; return h; })(),
     midiControls(),
+    window.DA_APP?(()=>{ const w=document.createElement("div"); w.className="ctl full";
+      const h=hint("Music keeps playing with the screen off or in another app (a notification shows while it plays). If your phone still stops it, open the app's settings, choose Battery, and pick Unrestricted.");
+      const b=mkBtn("Open app settings"); b.onclick=()=>nativeCall("Background","openSettings").catch(()=>{});
+      const l=document.createElement("span"); l.className="label"; l.textContent="Background playback"; w.append(l,h,b); b.style.alignSelf="flex-start"; return w; })():null,
     full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme))));
 }
 function renderMaster(){
@@ -1554,7 +1652,7 @@ function sessionsBody(){
     list.forEach((it,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=it.name; ssel.append(o); });
     const show=()=>{ ssel.value=String(SS.i); sabout.textContent=fmt(list[SS.i]); };
     ssel.onchange=()=>{ SS.i=+ssel.value; show(); status.textContent=""; };
-    const load=mkBtn("Load"), ren=mkBtn("Rename"), over=mkBtn("Update"), del=mkBtn("Delete");
+    const load=mkBtn("Load"), ren=mkBtn("Rename"), over=mkBtn("Save over"), del=mkBtn("Delete");
     box.querySelector(".pickrow").append(load);
     load.onclick=()=>{ const it=list[SS.i]; try{restore(it.data); status.textContent=`Loaded “${it.name}”`;}catch(e){status.textContent="That session couldn't be loaded.";} };
     ren.onclick=()=>{   // swap the list for a text box; Enter or Done saves, Escape cancels
@@ -1566,7 +1664,7 @@ function sessionsBody(){
       ren.onclick=commit;
       inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault(); commit();} if(e.key==="Escape") renderSessions(); });
     };
-    twoTap(over,"Update",()=>{const l=loadSessions().slice(); l[SS.i]={...l[SS.i],saved:new Date().toISOString(),data:snapshot()}; storeSessions(l); renderSessions();});
+    twoTap(over,"Save over",()=>{const l=loadSessions().slice(); l[SS.i]={...l[SS.i],saved:new Date().toISOString(),data:snapshot()}; storeSessions(l); renderSessions();});
     twoTap(del,"Delete",()=>{const l=loadSessions().slice(); l.splice(SS.i,1); storeSessions(l); SS.i=0; renderSessions(); updateDials();});
     const acts=document.createElement("div"); acts.className="btns"; acts.append(ren,over,del); box.append(acts);
     show();
@@ -1651,6 +1749,43 @@ const PRESETS=[
       harm:0.2, timb:0.3, morph:0.3, mdecay:0.5, colour:0.4, cutoff:0.8, dSend:0.2, rSend:0.3, pan:[-0.3,0.3,-0.15,0,0.45,-0.45,0.15,-0.1][i]})))}
 ];
 restore(DEFAULT_SESSION);
+/* ================= one Undo / Redo for everything =================
+   After any change settles, the whole setup is remembered (up to 100 steps). Undo and Redo move through
+   those steps. Melodies that aren't locked keep playing as they are (they change all the time while
+   playing), and saved sessions aren't affected. */
+const HIST={list:[],i:-1,applying:false,timer:null};
+function stateJSON(){
+  const s=snapshot(); s.tracks.forEach(t=>{ if(!t.lock) delete t.notes; }); return JSON.stringify(s);
+}
+function checkpoint(){
+  if(HIST.applying||(BLEND.active&&BLEND.running)) return;
+  const cur=stateJSON(); if(cur===HIST.list[HIST.i]) return;
+  HIST.list=HIST.list.slice(0,HIST.i+1); HIST.list.push(cur);
+  if(HIST.list.length>101) HIST.list.shift();
+  HIST.i=HIST.list.length-1; updateUndoButtons();
+}
+function changeSoon(){ clearTimeout(HIST.timer); HIST.timer=setTimeout(checkpoint,450); }
+function updateUndoButtons(){
+  document.getElementById("undobtn").disabled=HIST.i<=0;
+  document.getElementById("redobtn").disabled=HIST.i>=HIST.list.length-1;
+}
+function goHistory(d){
+  clearTimeout(HIST.timer); checkpoint();   // keep a change that hasn't been remembered yet
+  const j=HIST.i+d; if(j<0||j>=HIST.list.length) return;
+  HIST.i=j; HIST.applying=true;
+  try{ const keep=sel; restore(JSON.parse(HIST.list[j])); selectTab(typeof keep==="number"&&keep>=G.orbits?0:keep); }
+  finally{ HIST.applying=false; }
+  updateUndoButtons(); toast(d<0?"Undone":"Redone");
+}
+["pointerup","change","keyup","click"].forEach(ev=>document.addEventListener(ev,changeSoon,true));
+document.getElementById("undobtn").onclick=()=>goHistory(-1);
+document.getElementById("redobtn").onclick=()=>goHistory(1);
+document.addEventListener("keydown",e=>{
+  if(!(e.ctrlKey||e.metaKey)||e.altKey) return; const t=e.target; if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA")) return;
+  if(e.key.toLowerCase()==="z"){ e.preventDefault(); goHistory(e.shiftKey?1:-1); }
+  else if(e.key.toLowerCase()==="y"){ e.preventDefault(); goHistory(1); }
+});
+checkpoint();
 selectTab(0);
 
 /* ================= ring drawing ================= */
