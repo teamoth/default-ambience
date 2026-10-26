@@ -161,6 +161,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .pages button{flex:1 1 0;min-width:max-content}
 .navrow{display:flex;align-items:center;gap:8px}
 .phead .info{margin-left:auto}
+.phead .gdice{margin-left:auto}
+.phead .gdice+.info{margin-left:0}
 .info{flex:none;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--muted);
   font-family:var(--mono);font-size:.8rem;font-weight:500;cursor:pointer;display:grid;place-items:center;padding:0}
 .info[aria-expanded="true"]{background:var(--acc);color:var(--bg);border-color:var(--acc)}
@@ -269,7 +271,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.31";
+const APP_VERSION="1.32";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -1161,6 +1163,8 @@ function rollSound(t){
   t.ftype=chance(0.8)?"lowpass":pick(["bandpass","highpass"]);
   t.cutoff=t.ftype==="lowpass"?R(0.35,0.85):t.ftype==="bandpass"?R(0.3,0.7):R(0.05,0.35);
   t.res=R(0,0.45); t.fenv=chance(0.5)?0:R(-0.3,0.5); t.fdec=R(0.1,1.5);
+}
+function rollEnvelope(t){
   t.envMode=chance(0.7)?"adsr":"natural";
   t.A=Math.exp(R(Math.log(0.01),Math.log(4))); t.D=R(0.2,3); t.S=R(0.4,0.9); t.R=R(0.5,6);
   t.gate=pick([1,2,3,4,6,8,10,12]); t.tails=chance(0.4)?"ring":"cut";
@@ -1179,17 +1183,50 @@ function nudge(t){
   if(chance(0.4)) t.rot=(t.rot+pick([-1,1])+t.steps)%t.steps;
   if(chance(0.25)) t.hits=Math.max(1,Math.min(t.steps,t.hits+pick([-1,1])));
 }
+// one option per tab, so each randomises exactly what that tab shows (MIDI routing and Level are never changed)
 const ROLLS={
-  rhythm:["randomise rhythm",t=>rollRhythm(t)], sound:["randomise sound",t=>rollSound(t)],
-  movement:["randomise movement",t=>rollMovement(t)],
-  all:["randomise everything",t=>{rollRhythm(t);rollNotes(t);rollSound(t);rollMovement(t);rollMix(t);}],
+  sound:["randomise sound",t=>rollSound(t)],
+  pattern:["randomise pattern",t=>{rollRhythm(t);rollNotes(t);}],
+  motion:["randomise motion",t=>{rollEnvelope(t);rollMovement(t);}],
+  mix:["randomise mix",t=>rollMix(t)],
+  all:["randomise everything",t=>{rollSound(t);rollRhythm(t);rollNotes(t);rollEnvelope(t);rollMovement(t);rollMix(t);}],
   nudge:["nudge",t=>nudge(t)],
   reset:["reset",t=>{ Object.assign(t,clone(base),{midi:t.midi,local:t.local,steps:16,hits:4,rot:0,voice:"m:8",oct:3,span:1,vol:0.6,lock:false,notes:[],mods:newMods()}); }],
 };
 function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(tracks[i]); orbitChanged(i);
-  const done={rhythm:"new rhythm",sound:"new sound",movement:"new movement",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
-  toast("Orbit "+(i+1)+": "+done+". Hold it to undo."); }
+  const done={sound:"new sound",pattern:"new pattern",motion:"new motion",mix:"new mix",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
+  toast("Orbit "+(i+1)+": "+done+(kind==="reset"?". Undo is in its hold menu.":". Undo is under the dice.")); }
 
+/* ---- randomise the whole session (Global's dice): every shown orbit, the key, tempo and effects ----
+   Levels, mutes, MIDI routing, master volume and the number of orbits stay as they are. */
+let globalUndo=null;
+function randomiseAll(){
+  globalUndo=snapshot();
+  G.bpm=Math.round(R(40,110)); G.root=RI(0,11); G.scale=pick(Object.keys(SCALES));
+  FX.dMode=chance(0.6)?"sync":"free"; FX.dDiv=pick(DIVS)[0]; FX.dFree=+R(0.2,1.5).toFixed(3);
+  FX.dFb=R(0.3,0.75); FX.dTone=R(0.1,0.6); FX.dRet=R(0.2,0.6);
+  FX.rTime=R(0.7,0.98); FX.rDamp=R(0.1,0.7); FX.rPre=R(0,0.2); FX.rRet=R(0.6,1);
+  const idx=[]; for(let i=0;i<G.orbits;i++){ ROLLS.all[1](tracks[i]); idx.push(i); }
+  orbitChanged(...idx); applyParams(); updateDials(); selectTab(sel);
+  toast("Everything randomised. Undo is under the dice in Global.");
+}
+function undoGlobal(){ if(!globalUndo) return; const s=globalUndo; globalUndo=null; const keepSel=sel; restore(s); selectTab(keepSel); toast("Undone"); }
+function openGlobalRandom(anchor){
+  let m=document.getElementById("omenu");
+  if(!m){ openOrbitMenu(0); m=document.getElementById("omenu"); }
+  m.innerHTML=""; m.style.setProperty("--acc","var(--gl)");
+  const mkI=(txt,fn,dis)=>{ const b=document.createElement("button"); b.className="btn"; b.setAttribute("role","menuitem"); b.textContent=txt; b.disabled=!!dis;
+    b.onclick=()=>{ closeOrbitMenu(); fn&&fn(); }; return b; };
+  const head=document.createElement("div"); head.className="ohead"; head.textContent="Randomise everything";
+  const note=document.createElement("div"); note.className="osub"; note.textContent="Every orbit's sound, pattern, motion and mix, plus tempo, key and effects. Levels, mutes and MIDI stay as they are.";
+  const row=document.createElement("div"); row.className="orow"; row.append(mkI("Undo",undoGlobal,!globalUndo),mkI("Cancel"));
+  m.append(head,note,mkI("Randomise everything",randomiseAll),row);
+  m.hidden=false;
+  const rr=anchor.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight, vw=document.documentElement.clientWidth, vh=window.innerHeight;
+  m.style.left=Math.max(16,Math.min(vw-w-16,rr.right-w))+"px";
+  m.style.top=Math.max(10,Math.min(vh-h-10,rr.bottom+6))+"px";
+  setTimeout(()=>document.addEventListener("pointerdown",outsideMenu,true),0);
+}
 function closeOrbitMenu(){ const m=document.getElementById("omenu"); if(m) m.hidden=true; document.removeEventListener("pointerdown",outsideMenu,true); }
 function outsideMenu(e){ const m=document.getElementById("omenu"); if(m&&!m.contains(e.target)) closeOrbitMenu(); }
 function openOrbitMenu(i,mode,anchor){
@@ -1205,8 +1242,9 @@ function openOrbitMenu(i,mode,anchor){
   const canPaste=orbitClip&&orbitClip.from!==i;
   const solo=item(soloIdx===i?"End solo":"Solo",()=>toggleSolo(i)); solo.setAttribute("aria-pressed",soloIdx===i);
   const randomRows=()=>[
-    row(item("Rhythm",()=>rollOrbit(i,"rhythm"),false,"Randomise rhythm"), item("Sound",()=>rollOrbit(i,"sound"),false,"Randomise sound")),
-    row(item("Movement",()=>rollOrbit(i,"movement"),false,"Randomise movement"), item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything")),
+    row(item("Sound",()=>rollOrbit(i,"sound"),false,"Randomise sound"), item("Pattern",()=>rollOrbit(i,"pattern"),false,"Randomise pattern")),
+    row(item("Motion",()=>rollOrbit(i,"motion"),false,"Randomise motion"), item("Mix",()=>rollOrbit(i,"mix"),false,"Randomise mix")),
+    item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything"),
     item("Nudge gently",()=>rollOrbit(i,"nudge"))];
   if(mode==="random") m.append(div("ohead","Randomise orbit "+(i+1)),...randomRows(),div("osub",""),
     row(item("Undo",undoOrbit,!orbitUndo,orbitUndo?"Undo "+orbitUndo.label:"Nothing to undo"),item("Cancel")));
@@ -1233,7 +1271,7 @@ const INFO={
   "Mix + MIDI":"Delay send and Reverb send set how much of this orbit goes to the master delay and reverb, which you adjust in the Master square. Pan places the orbit left or right. Channel sends this orbit's notes (with their gate length) to the MIDI output chosen in Global; turn Internal sound off to hear only the MIDI instrument. Mute silences both.",
   "Delay":"Every orbit feeds this delay through its Delay send (Mix + MIDI tab). Tempo synced keeps the echo time locked to the tempo; Free sets it in milliseconds. Repeats sets how many echoes you hear, and Tone how dark they get.",
   "Reverb":"Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab). Decay time sets the length of the tail, Damping darkens it, and Pre-delay adds a short gap before it starts.",
-  "Global":"Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix + MIDI tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
+  "Global":"The dice randomises everything: every orbit's sound, pattern, motion and mix, plus tempo, key, scale and the delay and reverb (levels, mutes and MIDI stay as they are); Undo is in the same menu. Tempo applies to every orbit. Tap − or + to nudge it by 1 bpm, or hold to keep going. Root and Scale set which notes every orbit can play. MIDI output picks where orbits with a MIDI channel (Mix + MIDI tab) send their notes; it needs Chrome or Edge, and your browser will ask for permission the first time. Orbits switches between one row of 4 and two rows of 8; the second row is saved with the session, and its orbits stay silent while only 4 are shown. More orbits means more sound to work out, so the engine has a voice budget: if a phone would struggle, it quietly cuts short the least important note (one already fading, or else the oldest), like voice stealing on a hardware synth. The line under the switch shows how many voices are playing, how busy the engine is, and how many notes it has cut short. Heavier voice types (modal resonator, particle noise, inharmonic string) use the most. Theme switches between dark and light.",
   "Blend":"Numbers like levels, filters and tempo move smoothly; choices like voice type and rhythm switch partway, one orbit at a time. Pick a drift time to let it move by itself while playing, or drag the bar under the orbits by hand. Touching any control during a blend takes that setting out of the blend, so you can hold it where you like. The cross on the bar ends the blend and keeps the sound as it is.",
   "Session":"Presets are built in and always available. Rename gives a saved session a new name; Update saves the current setup over it. Loading a preset or session replaces the current setup, so save first if you want to keep it. A session saves everything, including locked melodies, in this browser. To move one to another browser or phone, copy it as a code and load the code there. Copy all sessions makes a single backup of every saved session (with their names), and Save backup file saves the same thing as a file (in the app, choose where it goes, such as Drive or email). To add them all back, for example after reinstalling the app, paste the backup and press Load code, or use Load from file. Codes are compact, so they fit in notes and messages. Names that are already taken get a number, so nothing is overwritten.",
 };
@@ -1420,7 +1458,10 @@ function tempoControl(){
   return row;
 }
 function renderGlobal(){
-  const gh=panelHead("Global","","--gl"); const [gi,gbox]=infoToggle("Global"); gh.append(gi); panel.append(gbox);
+  const gh=panelHead("Global","","--gl"); const [gi,gbox]=infoToggle("Global");
+  const gd=mkBtn(""); gd.className="btn dice gdice"; gd.innerHTML=DICE_SVG; gd.title="Randomise everything"; gd.setAttribute("aria-label","Randomise everything");
+  gd.onclick=()=>openGlobalRandom(gd);
+  gh.append(gd,gi); panel.append(gbox);
   panel.append(pageGrid(
     full(tempoControl()),
     choice(G,"root","Root",NOTES.map((n,i)=>[i,n]),updateDials),
