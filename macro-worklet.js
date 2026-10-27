@@ -42,8 +42,9 @@ class MacroOsc extends AudioWorkletProcessor {
     this.port.onmessage = (ev) => {
       const d = ev.data;
       if (d.type === "trig" || d.type === "set") {
-        this.queue.push(d);
-        this.queue.sort((a, b) => a.time - b.time);
+        const q = this.queue; let i = q.length;
+        while (i > 0 && q[i - 1].time > d.time) i--;   // keep the queue in time order
+        q.splice(i, 0, d);
       } else if (d.type === "clear") {
         this.queue.length = 0;
       }
@@ -71,6 +72,13 @@ class MacroOsc extends AudioWorkletProcessor {
       if (best < 0) break;
       this.stolen[best] = 1; total -= this.cost[best]; this.steals++;
     }
+  }
+  // Views onto each voice's output in the engine's memory, made once and reused: creating them on every
+  // block made thousands of small objects a second, and clearing those up can briefly stall the audio (pops).
+  view(v, n) {
+    const mem = this.e.memory.buffer;
+    if (mem !== this.mem) { this.mem = mem; this.views = []; }
+    return this.views[v] || (this.views[v] = new Float32Array(mem, this.e.mo_buffer(v), n));
   }
   process(inputs, outputs) {
     if (!this.ready) return true;
@@ -101,7 +109,7 @@ class MacroOsc extends AudioWorkletProcessor {
         const out = outputs[this.ring[v]] && outputs[this.ring[v]][0];
         if (!out) continue;
         e.mo_render(v, CH);
-        const buf = new Float32Array(e.memory.buffer, e.mo_buffer(v), CH);
+        const buf = this.view(v, CH);
         let pk = 0;
         this.vel[v] += (this.velTo[v] - this.vel[v]) * 0.25;   // glide over ~1 ms so a new velocity never clicks
         const g = this.vel[v];
@@ -159,8 +167,12 @@ class TextureReverb extends AudioWorkletProcessor {
     if (!this.ready) return true;
     const e = this.e, inp = inputs[0] || [];
     const n = out[0].length;
-    const L = new Float32Array(e.memory.buffer, e.rv_in_l(), n);
-    const R = new Float32Array(e.memory.buffer, e.rv_in_r(), n);
+    if (this.mem !== e.memory.buffer || this.n !== n) {   // made once and reused, not on every block
+      this.mem = e.memory.buffer; this.n = n;
+      this.L = new Float32Array(this.mem, e.rv_in_l(), n);
+      this.R = new Float32Array(this.mem, e.rv_in_r(), n);
+    }
+    const L = this.L, R = this.R;
     if (inp[0]) L.set(inp[0]); else L.fill(0);
     if (inp[1]) R.set(inp[1]); else if (inp[0]) R.set(inp[0]); else R.fill(0);
     e.rv_process(n);

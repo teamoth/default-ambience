@@ -128,8 +128,10 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 .btn.primary{background:var(--acc);color:var(--bg);border-color:var(--acc);font-weight:600}
 
 /* rings */
-.topbar{display:flex;align-items:center;gap:8px;margin-bottom:-8px}
-.topbar .appname{margin-right:auto;font-size:var(--fs-ui);font-weight:600;opacity:.7}
+.topbar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:-8px}
+.btn.hist{display:inline-flex;align-items:center;gap:6px;padding:0 12px;min-width:0}
+.btn.hist svg{width:16px;height:16px}
+.btn.hist:disabled{opacity:.35}
 .btn.icon{min-width:0;width:40px;height:32px;padding:0;display:grid;place-items:center}
 .btn.icon:disabled{opacity:.35}
 .rings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 -6px}
@@ -254,9 +256,9 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 </head>
 <body>
 <div class="wrap">
-  <div class="topbar"><span class="appname">Default Ambience</span>
-    <button class="btn icon" id="undobtn" aria-label="Undo" title="Undo" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-    <button class="btn icon" id="redobtn" aria-label="Redo" title="Redo" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+  <div class="topbar">
+    <button class="btn hist" id="undobtn" title="Undo the last change" disabled><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Undo</span></button>
+    <button class="btn hist" id="redobtn" title="Redo" disabled><span>Redo</span><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <section class="rings" id="rings" role="tablist" aria-label="Orbits"></section>
   <section class="blendbar" id="blendbar" aria-label="Blend" hidden>
     <div class="bnames"><span id="bfrom"></span><span id="bto"></span></div>
@@ -305,7 +307,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.35";
+const APP_VERSION="1.36";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -754,6 +756,9 @@ function nativeCall(plugin,method,opts){
   return Promise.reject(new Error("no bridge"));
 }
 window.daNativeStop=()=>{ if(playing) stop(); };   // the notification's Stop button
+// going out of view (another app, screen off): queue the next 1.6 s of notes straight away, before the
+// browser slows its timers down, so nothing is left waiting at the moment of switching
+document.addEventListener("visibilitychange",()=>{ if(playing&&ctx) schedule(); });
 /* ---- Android app: a short setup sheet for the two phone settings that keep music playing in the background ----
    Shown once after installing (and any time from Global). Each row turns into a tick once the setting is done. */
 function openSetup(){
@@ -1214,7 +1219,7 @@ function orbitChanged(...idx){
   applyParams(); updateDials(); if(idx.includes(sel)) selectTab(sel);
 }
 function copyOrbit(i){ orbitClip={from:i, data:orbitData(i,ORBIT_COPY_SKIP)}; toast("Orbit "+(i+1)+" copied"); }
-function pasteOrbit(i){ if(!orbitClip) return; remember("paste",i); setOrbit(i,orbitClip.data); orbitChanged(i); toast("Pasted onto orbit "+(i+1)+". Use the undo arrow to go back."); }
+function pasteOrbit(i){ if(!orbitClip) return; remember("paste",i); setOrbit(i,orbitClip.data); orbitChanged(i); toast("Pasted onto orbit "+(i+1)+". Undo brings it back."); }
 function swapOrbits(a,b){ remember("swap",a,b); const da=orbitData(a), db=orbitData(b); setOrbit(a,db); setOrbit(b,da); orbitChanged(a,b);
   if(soloIdx===a) soloIdx=b; else if(soloIdx===b) soloIdx=a; updateSolo(); toast("Orbits "+(a+1)+" and "+(b+1)+" swapped"); }
 function startSwap(i){ swapFrom=i; tracks[i].ringEl.classList.add("swapsrc"); toast("Tap the orbit to swap with"); }
@@ -1288,7 +1293,7 @@ const ROLLS={
 };
 function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(tracks[i]); orbitChanged(i);
   const done={sound:"new sound",pattern:"new pattern",motion:"new motion",mix:"new mix",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
-  toast("Orbit "+(i+1)+": "+done+". Use the undo arrow to go back."); }
+  toast("Orbit "+(i+1)+": "+done+". Undo brings it back."); }
 
 /* ---- randomise the whole session (Global's dice): every shown orbit, the key, tempo and effects ----
    Levels, mutes, MIDI routing, master volume and the number of orbits stay as they are. */
@@ -1301,7 +1306,7 @@ function randomiseAll(){
   FX.rTime=RW(0.7,0.98,0.3,1); FX.rDamp=RW(0.1,0.7,0,1); FX.rPre=RW(0,0.2,0,0.5); FX.rRet=RW(0.6,1,0.2,1);
   const idx=[]; for(let i=0;i<G.orbits;i++){ ROLLS.all[1](tracks[i]); idx.push(i); }
   orbitChanged(...idx); applyParams(); updateDials(); selectTab(sel);
-  toast("Everything randomised. Use the undo arrow to go back.");
+  toast("Everything randomised. Undo brings it back.");
 }
 function rangeChooser(){
   const w=seg(RAND,"range","How far",[["gentle","Gentle"],["wide","Wide"],["wild","Wild"]],saveRand);
@@ -1402,11 +1407,6 @@ const INFO={
     "Level: how loud the echoes are.",
     "Repeats: how many echoes you hear.",
     "Tone: how dark the echoes get."],
-  "Engine":[
-    "Sound engine load: how much of the phone's time the voices take. If it gets too busy, a fading or old note is shortened to keep the sound smooth.",
-    "Buffer: Steady glitches least when the phone is busy (for example in the background); Fast responds quickest to touches; Balanced is in between.",
-    "Quality: Best is 48 kHz. Lighter (32 kHz) and Lightest (24 kHz) do less work, with a little less high treble.",
-    "Both are remembered on this device. Apply now restarts the sound engine with them; press Play again afterwards."],
   "Reverb":[
     "Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab).",
     "Level: how loud the reverb is.",
@@ -1420,6 +1420,10 @@ const INFO={
     "Tempo: speed for every orbit.",
     "Root, Scale: which notes every orbit can play.",
     "Orbits: one row of 4, or two rows of 8. Orbits 5–8 are saved with the session.",
+    "Sound engine load: how much of the phone's time the voices take. If it gets too busy, a fading or old note is shortened to keep the sound smooth.",
+    "Buffer: Steady glitches least when the phone is busy (for example in the background); Fast responds quickest to touches; Balanced is in between.",
+    "Quality: Best is 48 kHz. Lighter (32 kHz) and Lightest (24 kHz) do less work, with a little less high treble.",
+    "Buffer and Quality are remembered on this device. Apply now restarts the sound engine with them; press Play again afterwards.",
     "MIDI output: where orbits with a MIDI channel send their notes (Chrome or Edge; the browser asks permission the first time).",
     "Theme: dark or light."],
   "Blend":[
@@ -1428,10 +1432,10 @@ const INFO={
     "Touching a control during a blend keeps that setting where you put it.",
     "The cross on the bar ends the blend and keeps the sound as it is."],
   "Session":[
-    "Presets: built in and always available.",
-    "Save: keeps everything, including locked melodies, on this device. The dice suggests another name.",
-    "Load, Rename, Save over, Delete: for the saved session chosen in the list.",
-    "Loading replaces the current setup (the undo arrow brings it back).",
+    "Now playing: the session you last loaded or saved, and whether you've changed it since.",
+    "Choose a session: the built-in presets, then your own sessions. Load plays it; Rename, Save over and Delete work on your own sessions.",
+    "Save as a new session: keeps everything, including locked melodies, on this device. Leave the name blank or tap the dice for a suggestion.",
+    "Loading replaces the current setup (Undo brings it back).",
     "Copy current as code: a code to send to a friend or another device. Paste one here and press Load code.",
     "Copy all sessions, Save backup file: one backup of every saved session. Load it back with Load code or Load from file; names already taken get a number."],
 };
@@ -1440,7 +1444,7 @@ const MAIN_INFO=[
   "Some info about what's going on here:",
   "Each of the circular 'orbits' is a looping rhythm. There are 4 to start with; Global can switch to 8, in two rows. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
-  "The arrows at the top undo and redo any change, back up to 100 steps.",
+  "Undo and Redo at the top take back or redo any change, up to 100 steps.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Sound (voice and filter), Pattern (rhythm and notes), Motion (envelope and modulation) and Mix + MIDI (sends, pan and MIDI channel).",
   "At the top of each orbit's panel: Mute, Solo, the dice (randomise) and ⋯ (copy, paste, swap with another orbit, or reset). Pressing and holding an orbit opens the same ⋯ menu. Copied settings survive loading another session.",
   "Buttons below the orbits: Play starts and stops everything. Global holds the tempo, key, scale, number of orbits (4 or 8) and colour theme (dark/light). Master holds the overall volume and the shared delay and reverb. Session has the presets, saving and loading, session codes (that you can copy and share with others), plus a Blend section where sessions can be blended together.",
@@ -1647,16 +1651,21 @@ function renderGlobal(){
   gd.onclick=()=>openGlobalRandom(gd);
   gh.append(gd,gi); panel.append(gbox);
   panel.append(pageGrid(
+    sectHead("Tempo and key"),
     full(tempoControl()),
     withLock(choice(G,"root","Root",NOTES.map((n,i)=>[i,n]),updateDials),"lockRoot","root"),
     withLock(scaleChoice(),"lockScale","scale"),
-    full(seg(G,"orbits","Orbits",[["4","4"],["8","8"]],()=>{ G.orbits=+G.orbits; showOrbits(); applyParams(); })),
+    sectHead("Orbits"),
+    full(seg(G,"orbits","Orbits",[["4","4 orbits"],["8","8 orbits"]],()=>{ G.orbits=+G.orbits; showOrbits(); applyParams(); },true)),
+    sectHead("Audio engine"),
+    ...audioEngineControls(),
+    sectHead("MIDI"),
     midiControls(),
-    window.DA_APP?(()=>{ const w=document.createElement("div"); w.className="ctl full";
-      const h=hint("Music keeps playing with the screen off or in another app, as long as notifications are allowed and battery use is Unrestricted.");
-      const b=mkBtn("Check phone settings"); b.onclick=openSetup;
-      const l=document.createElement("span"); l.className="label"; l.textContent="Background playback"; w.append(l,h,b); w.style.gap="6px"; b.style.alignSelf="flex-start"; return w; })():null,
-    full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme))));
+    ...(window.DA_APP?[sectHead("Background playback"),
+      hint("Music keeps playing with the screen off or in another app, as long as notifications are allowed and battery use is Unrestricted."),
+      (()=>{ const b=mkBtn("Check phone settings"); b.onclick=openSetup; const w=document.createElement("div"); w.className="ctl full"; w.append(b); b.style.alignSelf="flex-start"; return w; })()]:[]),
+    sectHead("Theme"),
+    full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme,true))));
 }
 function applyAudioNow(){
   try{ sessionStorage.setItem("default-ambience-resume",JSON.stringify({snap:snapshot(),sel})); }catch(e){}
@@ -1675,22 +1684,24 @@ function updateEngineMeter(){
   f.style.width=Math.min(100,pc)+"%"; f.dataset.level=pc<50?"ok":pc<75?"high":"over";
   t.textContent=pc+"% \u00b7 "+s.voices+(s.voices===1?" voice":" voices")+(s.steals?" \u00b7 "+s.steals+" shortened":"");
 }
+function audioEngineControls(){
+  const pending=ctx&&((LATENCY[AUDIO.buffer]!==(ctx.__latency||LATENCY.steady))||(+AUDIO.rate!==ctx.sampleRate));
+  const apply=document.createElement("div"); apply.className="ctl full";
+  if(pending){ const b=mkBtn("Apply now"); b.onclick=applyAudioNow; apply.append(hint("These take effect when the sound engine restarts. Apply now restarts it and keeps all your settings; then press Play again."),b); b.style.alignSelf="flex-start"; }
+  return [engineMeter(),
+    full(seg(AUDIO,"buffer","Buffer",[["fast","Fast"],["balanced","Balanced"],["steady","Steady"]],()=>{ saveAudio(); renderGlobal(); })),
+    hint("Steady gives the phone the most time for each moment of sound, so it glitches least when other apps are busy. Fast responds quickest to touches."),
+    full(seg(AUDIO,"rate","Quality",[["48000","Best"],["32000","Lighter"],["24000","Lightest"]],()=>{ AUDIO.rate=+AUDIO.rate; saveAudio(); renderGlobal(); })),
+    hint("Lighter does about a third less work and Lightest about half, with a little less sparkle in the very highest treble."),
+    apply.childNodes.length?apply:null];
+}
 function renderMaster(){
   panelHead("Master","","--fx");
   const vol=slider(G,"master","Master volume",0,1,0.01,pct,updateDials); vol.classList.add("levelrow");
-  const nav=pageTabs(["Delay","Reverb","Engine"],fxPage,n=>{fxPage=n; renderMaster();});
+  const nav=pageTabs(["Delay","Reverb"],fxPage,n=>{fxPage=n; renderMaster();});
   let page;
-  if(fxPage==="Engine"){
-    const pending=ctx&&((LATENCY[AUDIO.buffer]!==(ctx.__latency||LATENCY.steady))||(+AUDIO.rate!==ctx.sampleRate));
-    const apply=document.createElement("div"); apply.className="ctl full";
-    if(pending){ const b=mkBtn("Apply now"); b.onclick=applyAudioNow; apply.append(hint("These take effect when the sound engine restarts. Apply now restarts it and keeps all your settings; then press Play again."),b); b.style.alignSelf="flex-start"; }
-    page=pageGrid(engineMeter(),
-      full(seg(AUDIO,"buffer","Buffer",[["fast","Fast"],["balanced","Balanced"],["steady","Steady"]],()=>{ saveAudio(); renderMaster(); })),
-      hint("Steady gives the phone the most time for each moment of sound, so it glitches least when other apps are busy. Fast responds quickest to touches."),
-      full(seg(AUDIO,"rate","Quality",[["48000","Best"],["32000","Lighter"],["24000","Lightest"]],()=>{ AUDIO.rate=+AUDIO.rate; saveAudio(); renderMaster(); })),
-      hint("Lighter does about a third less work and Lightest about half, with a little less sparkle in the very highest treble."),
-      apply.childNodes.length?apply:null);
-  } else if(fxPage==="Delay"){
+  if(fxPage==="Engine") fxPage="Delay";
+  if(fxPage==="Delay"){
     const free=FX.dMode==="free";
     const proxy=free
       ? {holds:"dFree", get p(){return Math.log(FX.dFree/0.02)/Math.log(100);}, set p(v){FX.dFree=+(0.02*Math.pow(100,v)).toFixed(3);}}
@@ -1745,69 +1756,78 @@ function randomSessionName(){
   return pick(NAME_A)+" "+pick(NAME_B)+" "+(loadSessions().length+1);
 }
 const DICE_SVG='<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/></svg>';
+// which session is playing now: its name, and its settings when loaded or saved (to tell if it has changed since)
+const CURRENT={name:"", kind:"", json:""};
+function setCurrent(name,kind){ CURRENT.name=name; CURRENT.kind=kind; CURRENT.json=stateJSON(); }
+function currentText(){
+  if(!CURRENT.name) return "Now playing: an unsaved session.";
+  const changed=stateJSON()!==CURRENT.json;
+  return "Now playing: “"+CURRENT.name+"”"+(CURRENT.kind==="preset"?" (preset)":"")+(changed?", changed since "+(CURRENT.kind==="preset"?"loading":"saving")+".":".");
+}
 function sessionsBody(){
   const wrap=document.createElement("div"); wrap.className="page";
-  wrap.append(sectHead("Presets"));
-  // presets: pick one from the list, its description shows underneath
-  const PS=sessionsBody.pre||(sessionsBody.pre={i:0}); if(PS.i>=PRESETS.length) PS.i=0;
-  const pre=document.createElement("div"); pre.className="ctl full"; pre.style.gap="6px";
-  pre.innerHTML=`<div class="pickrow"><select id="presetsel" aria-label="Preset">${PRESETS.map((p,i)=>`<option value="${i}">${p.name}</option>`).join("")}</select></div>
-    <span class="note" id="presetabout"></span>`;
-  const psel=pre.querySelector("select"), pabout=pre.querySelector("#presetabout");
-  const pload=mkBtn("Load"); pre.querySelector(".pickrow").append(pload);
-  const preStatus=document.createElement("p"); preStatus.className="note"; preStatus.setAttribute("role","status"); preStatus.style.margin="0";
-  const showPre=()=>{ psel.value=String(PS.i); pabout.textContent=PRESETS[PS.i].about; };
-  psel.onchange=()=>{ PS.i=+psel.value; showPre(); preStatus.textContent=""; };
-  pload.onclick=()=>{ const pr=PRESETS[PS.i]; restore(clone(pr.data)); preStatus.textContent=`Loaded “${pr.name}”`; };
-  showPre(); pre.append(preStatus); wrap.append(pre);
-
-  // your sessions: save the current setup, then pick a saved one from the list to load, rename, update or delete
   const list=loadSessions();
-  wrap.append(sectHead("Your sessions"));
+  // one list: the built-in presets, then your saved sessions. Keys: "p0" = preset 0, "s0" = saved session 0
+  const SS=sessionsBody.pick||(sessionsBody.pick={key:list.length?"s0":"p0"});
+  const valid=k=>k[0]==="p"?+k.slice(1)<PRESETS.length:+k.slice(1)<list.length;
+  if(!valid(SS.key)) SS.key=list.length?"s0":"p0";
+  const sayS=t=>{ const st=document.getElementById("sessstatus"); if(st) st.textContent=t; };
+  const now=hint(currentText()); now.id="sessnow"; wrap.append(now);
+
+  const box=document.createElement("div"); box.className="ctl full"; box.style.gap="6px";
+  box.innerHTML=`<label class="label" for="sesspick">Choose a session</label><div class="pickrow"><select id="sesspick"></select></div><span class="note" id="sessabout"></span>`;
+  const pickEl=box.querySelector("select"), about=box.querySelector("#sessabout");
+  const gP=document.createElement("optgroup"); gP.label="Presets";
+  PRESETS.forEach((p,i)=>{ const o=document.createElement("option"); o.value="p"+i; o.textContent=p.name; gP.append(o); });
+  pickEl.append(gP);
+  if(list.length){ const gS=document.createElement("optgroup"); gS.label="Your sessions ("+list.length+")";
+    list.forEach((it,i)=>{ const o=document.createElement("option"); o.value="s"+i; o.textContent=it.name; gS.append(o); }); pickEl.append(gS); }
+  const fmt=it=>{ const w=new Date(it.saved); return `Saved ${w.toLocaleDateString([], {day:"numeric",month:"short"})} ${w.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · ${it.data.G.bpm} bpm · ${NOTES[it.data.G.root]} ${it.data.G.scale}`; };
+  const load=mkBtn("Load"); box.querySelector(".pickrow").append(load);
+  const ren=mkBtn("Rename"), over=mkBtn("Save over"), del=mkBtn("Delete");
+  const acts=document.createElement("div"); acts.className="btns"; acts.append(ren,over,del); box.append(acts);
+  const show=()=>{ pickEl.value=SS.key; const own=SS.key[0]==="s", i=+SS.key.slice(1);
+    about.textContent=own?fmt(list[i]):"Preset: "+PRESETS[i].about;
+    acts.hidden=!own; };   // presets can't be renamed, saved over or deleted
+  pickEl.onchange=()=>{ SS.key=pickEl.value; show(); sayS(""); };
+  load.onclick=()=>{ const i=+SS.key.slice(1);
+    try{ if(SS.key[0]==="p"){ restore(clone(PRESETS[i].data)); setCurrent(PRESETS[i].name,"preset"); sayS(`Loaded “${PRESETS[i].name}”`); }
+      else { restore(list[i].data); setCurrent(list[i].name,"saved"); sayS(`Loaded “${list[i].name}”`); }
+      document.getElementById("sessnow").textContent=currentText(); }
+    catch(e){ sayS("That session couldn't be loaded."); } };
+  ren.onclick=()=>{   // swap the list for a text box; Enter or Done saves, Escape cancels
+    const i=+SS.key.slice(1), it=list[i], inp=document.createElement("input");
+    inp.type="text"; inp.maxLength=40; inp.value=it.name; inp.setAttribute("aria-label","New name for "+it.name);
+    pickEl.replaceWith(inp); inp.focus(); inp.select(); ren.textContent="Done";
+    const commit=()=>{ const v=inp.value.trim(); if(v&&v!==it.name){ const l=loadSessions().slice(); l[i]={...l[i],name:v}; storeSessions(l);
+        if(CURRENT.kind==="saved"&&CURRENT.name===it.name) CURRENT.name=v; }
+      renderSessions(); if(v&&v!==it.name) sayS(`Renamed to “${v}”`); };
+    ren.onclick=commit;
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault(); commit();} if(e.key==="Escape") renderSessions(); });
+  };
+  twoTap(over,"Save over",()=>{ const i=+SS.key.slice(1), l=loadSessions().slice(); l[i]={...l[i],saved:new Date().toISOString(),data:snapshot()}; storeSessions(l);
+    setCurrent(l[i].name,"saved"); renderSessions(); sayS(`Saved over “${l[i].name}”`); });
+  twoTap(del,"Delete",()=>{ const i=+SS.key.slice(1), l=loadSessions().slice(), gone=l[i].name; l.splice(i,1); storeSessions(l);
+    if(CURRENT.kind==="saved"&&CURRENT.name===gone) CURRENT.name="";
+    SS.key=l.length?"s0":"p0"; renderSessions(); updateDials(); sayS(`Deleted “${gone}”`); });
+  show(); wrap.append(box);
+
+  // save the current setup as a new session; a blank name gets a suggestion
   const save=document.createElement("div"); save.className="ctl full";
-  save.innerHTML=`<label class="label" for="sessname">Save the current setup as</label>
-    <div class="pickrow"><input id="sessname" type="text" maxlength="40"></div>`;
-  const nameIn=save.querySelector("input"); nameIn.value=randomSessionName();
-  const reName=mkBtn(""); reName.className="btn dice"; reName.innerHTML=DICE_SVG; reName.title="Another name"; reName.setAttribute("aria-label","Pick another name");
+  save.innerHTML=`<label class="label" for="sessname">Save the current setup as a new session</label>
+    <div class="pickrow"><input id="sessname" type="text" maxlength="40" placeholder="Name (or tap the dice)"></div>`;
+  const nameIn=save.querySelector("input");
+  const reName=mkBtn(""); reName.className="btn dice"; reName.innerHTML=DICE_SVG; reName.title="Suggest a name"; reName.setAttribute("aria-label","Suggest a name");
   reName.onclick=()=>{ nameIn.value=randomSessionName(); };
   const saveBtn=mkBtn("Save"); save.querySelector(".pickrow").append(reName,saveBtn);
-  const status=document.createElement("p"); status.className="note full"; status.setAttribute("role","status");
-  const SS=sessionsBody.saved||(sessionsBody.saved={i:0});
   saveBtn.onclick=()=>{
     const name=nameIn.value.trim()||randomSessionName();
     const l=loadSessions().slice(); l.unshift({name,saved:new Date().toISOString(),data:snapshot()});
-    storeSessions(l); SS.i=0; renderSessions(); updateDials();
-    const st=document.querySelector("#panel p.note.full[role=status]"); if(st) st.textContent=`Saved “${name}”`;
+    storeSessions(l); setCurrent(name,"saved"); SS.key="s0"; renderSessions(); updateDials(); sayS(`Saved “${name}”`);
   };
-  wrap.append(save);
-  const box=document.createElement("div"); box.className="ctl full"; box.style.gap="6px";
-  if(!list.length){ box.append(hint("No saved sessions yet. Saved sessions keep everything, including locked melodies.")); }
-  else {
-    if(SS.i>=list.length) SS.i=0;
-    const fmt=it=>{ const w=new Date(it.saved); return `${w.toLocaleDateString([], {day:"numeric",month:"short"})} ${w.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})} · ${it.data.G.bpm} bpm · ${NOTES[it.data.G.root]} ${it.data.G.scale}`; };
-    box.innerHTML=`<label class="label" for="savedsel">Saved sessions (${list.length})</label><div class="pickrow"><select id="savedsel"></select></div><span class="note" id="savedabout"></span>`;
-    const ssel=box.querySelector("select"), sabout=box.querySelector("#savedabout");
-    list.forEach((it,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=it.name; ssel.append(o); });
-    const show=()=>{ ssel.value=String(SS.i); sabout.textContent=fmt(list[SS.i]); };
-    ssel.onchange=()=>{ SS.i=+ssel.value; show(); status.textContent=""; };
-    const load=mkBtn("Load"), ren=mkBtn("Rename"), over=mkBtn("Save over"), del=mkBtn("Delete");
-    box.querySelector(".pickrow").append(load);
-    load.onclick=()=>{ const it=list[SS.i]; try{restore(it.data); status.textContent=`Loaded “${it.name}”`;}catch(e){status.textContent="That session couldn't be loaded.";} };
-    ren.onclick=()=>{   // swap the list for a text box; Enter or Done saves, Escape cancels
-      const it=list[SS.i], inp=document.createElement("input");
-      inp.type="text"; inp.maxLength=40; inp.value=it.name; inp.setAttribute("aria-label","New name for "+it.name);
-      ssel.replaceWith(inp); inp.focus(); inp.select(); ren.textContent="Done";
-      const commit=()=>{ const v=inp.value.trim(); if(v&&v!==it.name){ const l=loadSessions().slice(); l[SS.i]={...l[SS.i],name:v}; storeSessions(l); }
-        renderSessions(); if(v&&v!==it.name){ const st=document.querySelector("#panel p.note.full[role=status]"); if(st) st.textContent=`Renamed to “${v}”`; } };
-      ren.onclick=commit;
-      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){e.preventDefault(); commit();} if(e.key==="Escape") renderSessions(); });
-    };
-    twoTap(over,"Save over",()=>{const l=loadSessions().slice(); l[SS.i]={...l[SS.i],saved:new Date().toISOString(),data:snapshot()}; storeSessions(l); renderSessions();});
-    twoTap(del,"Delete",()=>{const l=loadSessions().slice(); l.splice(SS.i,1); storeSessions(l); SS.i=0; renderSessions(); updateDials();});
-    const acts=document.createElement("div"); acts.className="btns"; acts.append(ren,over,del); box.append(acts);
-    show();
-  }
-  wrap.append(box,status);
+  nameIn.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); saveBtn.click(); } });
+  const status=document.createElement("p"); status.className="note full"; status.id="sessstatus"; status.setAttribute("role","status");
+  wrap.append(save,status);
   // move between devices or browsers
   wrap.append(sectHead("Share and back up"));
   const tx=document.createElement("div"); tx.className="ctl full"; tx.style.cssText="gap:8px";
@@ -1831,8 +1851,8 @@ function sessionsBody(){
   };
   // a pasted code or a chosen file: a backup adds every session in it, a single code loads it to play
   const loadText=async text=>{
-    if(isBackup(text)){ const n=importBackup(await decodeBackup(text)); SS.i=0; renderSessions(); updateDials(); say("Added "+nS(n)+" to Your sessions."); return; }
-    restore(await decodeSession(text)); say("Loaded");
+    if(isBackup(text)){ const n=importBackup(await decodeBackup(text)); renderSessions(); updateDials(); say("Added "+nS(n)+" to Your sessions."); return; }
+    restore(await decodeSession(text)); CURRENT.name=""; say("Loaded"); const nw=document.getElementById("sessnow"); if(nw) nw.textContent=currentText();
   };
   ld.onclick=async()=>{ try{ await loadText(code.value); }catch(e){ say(e.message); } };
   opn.onclick=async()=>{ try{ await loadText(await pickTextFile()); }catch(e){ say(e.message); } };
@@ -1927,6 +1947,7 @@ document.addEventListener("keydown",e=>{
   else if(e.key.toLowerCase()==="y"){ e.preventDefault(); goHistory(1); }
 });
 checkpoint();
+setCurrent(PRESETS[0].name,"preset");   // the app starts with the Default Ambience preset
 selectTab(0);
 
 /* ================= ring drawing ================= */
