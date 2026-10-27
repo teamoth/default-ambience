@@ -7,8 +7,10 @@
 :root{
   --bg:#13141d; --panel:#1b1d29; --raise:#242737; --line:#30344a;
   --fg:#ebe6da; --muted:#9093a8;
-  --t1:#eaa53c; --t2:#5fc4b6; --t3:#e07a9b; --t4:#7aa7f2; --t5:#a4c95a; --t6:#b48ef0; --t7:#e58a63; --t8:#62b8e0;
-  --gl:#b9d064; --fx:#b39cf0; --ss:#c3c6d6; --help:#f08a4b;
+  /* orbits: eight hues spread round the colour wheel (gold, teal, pink, blue, lime, violet, magenta, green);
+     Global, Master and Session use quiet neutral tones so they never look like an orbit */
+  --t1:#f2be3d; --t2:#3fc9b3; --t3:#f0709d; --t4:#6f9cff; --t5:#a8d64a; --t6:#a77cff; --t7:#e25ee0; --t8:#4cc36a;
+  --gl:#e6dcc0; --fx:#bfcbe2; --ss:#a9abba; --help:#f07f3c;
   /* control scale: one text size and two heights for every button, tab and menu */
   --fs-ui:.84rem; --h-ctl:32px; --h-main:38px;
   --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -18,8 +20,8 @@
 :root[data-app="light"]{
   --bg:#f3f2ee; --panel:#ffffff; --raise:#ebeae5; --line:#d5d3cb;
   --fg:#1c1d26; --muted:#676978;
-  --t1:#b8730c; --t2:#178a7b; --t3:#c03f6a; --t4:#3567cc; --t5:#5f8a1c; --t6:#7a4fc4; --t7:#bf5426; --t8:#1f7fae;
-  --gl:#62821a; --fx:#6b55d4; --ss:#5b5f72; --help:#cf5a1f;
+  --t1:#a87300; --t2:#0f8a77; --t3:#c2335f; --t4:#2f5fd0; --t5:#5a8a00; --t6:#6b3fd1; --t7:#a52aa5; --t8:#1e8f3c;
+  --gl:#6b5a33; --fx:#3f4f73; --ss:#5b5f72; --help:#cf5a1f;
   color-scheme:light;
 }
 html,body{background:var(--bg);color:var(--fg)}
@@ -80,6 +82,8 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 .omenu{position:fixed;z-index:25;box-sizing:border-box;width:230px;max-height:calc(100vh - 20px);overflow:auto;background:var(--panel);border:2px solid var(--acc);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 24px color-mix(in srgb,#000 30%,transparent)}
 .omenu[hidden]{display:none}
 .omenu .ohead{font-size:var(--fs-ui);font-weight:600;padding:2px 4px}
+.omenu .rangeseg{margin:0 0 4px}
+.omenu .rangeseg .label{font-size:calc(var(--fs-ui)*.9);opacity:.75;padding:0 4px}
 .omenu .btn{width:100%;padding-left:4px;padding-right:4px}
 .omenu .orow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .omenu .osub{font-size:calc(var(--fs-ui)*.9);opacity:.7;padding:4px 4px 0}
@@ -91,6 +95,11 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 .toast.show{opacity:1}
 .modalcard{--acc:var(--help);box-sizing:border-box;width:min(480px,100%);max-height:100%;overflow:auto;background:var(--panel);border:2px solid var(--acc);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px}
 .modalcard textarea{min-height:120px}
+.setuptitle{font-size:1.05rem;margin:0}
+.setuprow{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.setuprow>div{flex:1;display:flex;flex-direction:column;gap:2px}
+.setuprow .btn{flex:none}
+.setuprow.done .btn{color:var(--t8);border-color:var(--t8);opacity:1}
 .modalcard input[type=text],.modalcard input[type=email]{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%;box-sizing:border-box}
 #fbfields{display:flex;flex-direction:column;gap:4px}
 #fbfields[hidden],#fbsend[hidden]{display:none}
@@ -141,10 +150,14 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead .tname{font-size:1rem;flex:none}
 .vhead .ctl{flex:1 1 100%}   /* Level gets its own full-width row under i and Mute */
 .vhead .btn{flex:none;min-width:56px}
+.lockrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.lockbtn{font:inherit;font-size:.75rem;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;height:24px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+.lockbtn[aria-pressed="true"]{color:var(--acc);border-color:var(--acc)}
 .btn.more{font-size:1.2rem;line-height:1}
 .btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center;flex:none}
 .vhead .oname{margin-left:auto;font-weight:600;font-size:var(--fs-ui);color:var(--acc);white-space:nowrap}
-@media (max-width:370px){ .vhead{column-gap:8px} .vhead .btn{min-width:0;padding-left:10px;padding-right:10px} .vhead .btn.dice{width:38px} .vhead .ow{display:none} .vhead .oname{font-size:1rem} }
+@media (max-width:460px){ .vhead .ow{display:none} .vhead .oname{font-size:1.05rem} }
+@media (max-width:370px){ .vhead{column-gap:6px} .vhead .btn{min-width:0;padding-left:8px;padding-right:8px} .vhead .btn.dice{width:34px} .vhead .info{width:28px;height:28px} }
 .pages{display:flex;gap:6px;flex:1;min-width:0}
 .pages button{flex:1 1 0;min-width:max-content}
 .navrow{display:flex;align-items:center;gap:8px}
@@ -187,7 +200,6 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .nudge{flex:none;width:38px;padding:0;font-size:1rem;touch-action:manipulation}
 .modslot{padding:10px 0 12px 12px;margin-top:6px;border-left:3px solid var(--acc);border-radius:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--acc) 9%,transparent),transparent 70%)}
 .modslot .modhead{display:flex;align-items:center;gap:8px;font-size:var(--fs-ui);font-weight:600;margin-bottom:8px;min-width:0}
-.modslot .modnum{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:.75rem;background:var(--acc);color:var(--panel)}
 .modslot .modsum{margin-left:auto;font-weight:500;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .modslot.off .modsum{color:inherit;opacity:.6}
 .secthead{font-size:var(--fs-ui);font-weight:600;color:var(--acc);padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}
@@ -262,7 +274,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.33";
+const APP_VERSION="1.34";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -707,6 +719,34 @@ function nativeCall(plugin,method,opts){
   return Promise.reject(new Error("no bridge"));
 }
 window.daNativeStop=()=>{ if(playing) stop(); };   // the notification's Stop button
+/* ---- Android app: a short setup sheet for the two phone settings that keep music playing in the background ----
+   Shown once after installing (and any time from Global). Each row turns into a tick once the setting is done. */
+function openSetup(){
+  let m=document.getElementById("setupsheet");
+  if(!m){
+    m=document.createElement("div"); m.className="modal"; m.id="setupsheet"; m.setAttribute("role","dialog"); m.setAttribute("aria-modal","true");
+    m.innerHTML=`<div class="modalcard setupcard"><h2 class="setuptitle">Keep the music playing</h2>
+      <p class="note">Two phone settings let Default Ambience play with the screen off or while you use other apps.</p>
+      <div class="setuprow" id="setnot"><div><strong>Notifications</strong><span class="note">Shows a "Playing" notification with a Stop button. Android needs it to keep the music going.</span></div><button class="btn"></button></div>
+      <div class="setuprow" id="setbat"><div><strong>Battery: Unrestricted</strong><span class="note">In the settings that open, tap App battery usage (or Battery) and choose Unrestricted, or turn on Allow background usage. Then come back here.</span></div><button class="btn"></button></div>
+      <div class="btns"><button class="btn" id="setdone">Continue</button></div></div>`;
+    document.body.append(m);
+    m.querySelector("#setnot button").onclick=()=>nativeCall("Background","requestNotifications").catch(()=>{}).then(()=>setTimeout(refreshSetup,800));
+    m.querySelector("#setbat button").onclick=()=>nativeCall("Background","openSettings").catch(()=>{});
+    m.querySelector("#setdone").onclick=()=>{ m.hidden=true; try{ localStorage.setItem("default-ambience-setup","shown"); }catch(e){} };
+    document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&!m.hidden) refreshSetup(); });
+  }
+  m.hidden=false; refreshSetup();
+}
+function refreshSetup(){
+  const show=(id,ok,label)=>{ const r=document.getElementById(id); if(!r) return; const b=r.querySelector("button");
+    r.classList.toggle("done",!!ok); b.textContent=ok?"\u2713 "+okText:label; b.disabled=!!ok; };
+  let okText;
+  nativeCall("Background","status").then(st=>{ okText="Allowed"; show("setnot",st.notifications,"Allow"); okText="Set"; show("setbat",st.battery,"Open settings"); })
+    .catch(()=>{ show("setnot",false,"Allow"); show("setbat",false,"Open settings"); });
+}
+if(window.DA_APP){ let seen=null; try{ seen=localStorage.getItem("default-ambience-setup"); }catch(e){}
+  if(!seen) setTimeout(openSetup,600); }
 let playing=false, tick=0, nextTime=0, timer=null; const visQ=[];
 function schedule(){
   applyContinuousMods();
@@ -1155,31 +1195,42 @@ function toggleSolo(i){ soloIdx=soloIdx===i?-1:i;
 const R=(a,b)=>a+Math.random()*(b-a), RI=(a,b)=>Math.floor(R(a,b+1)), pick=a=>a[Math.floor(Math.random()*a.length)];
 const chance=p=>Math.random()<p;
 const AMBIENT_VOICES=MACRO.map(([i])=>i).filter(i=>i<21);   // leave out the drum types
+/* How far randomising may wander, and what it leaves alone. Remembered on this device.
+   Gentle keeps to the middle of each control; Wide reaches most of it; Wild uses the whole range. */
+const RAND={range:"wide", lockRoot:false, lockScale:false};
+try{ Object.assign(RAND,JSON.parse(localStorage.getItem("default-ambience-randomise")||"{}")); }catch(e){}
+const saveRand=()=>{ try{ localStorage.setItem("default-ambience-randomise",JSON.stringify(RAND)); }catch(e){} };
+const wild=()=>({gentle:0,wide:0.55,wild:1}[RAND.range]??0.55);
+// a random value between a and b, widened towards the full range lo..hi as the setting gets wilder
+const RW=(a,b,lo,hi)=>{ const w=wild(); return R(a+(lo-a)*w, b+(hi-b)*w); };
+const RWI=(a,b,lo,hi)=>Math.round(RW(a,b,lo,hi));
 function rollRhythm(t){
-  t.steps=pick([5,6,7,8,9,10,11,12,13,14,15,16,16,16]);
-  t.hits=RI(1,Math.max(1,Math.round(t.steps*0.45))); t.rot=RI(0,t.steps-1);
-  t.prob=chance(0.5)?100:RI(45,95); t.swing=chance(0.7)?0:RI(5,30); t.notes=[];
+  const w=wild();
+  t.steps=w<0.2?pick([5,6,7,8,9,10,11,12,13,14,15,16,16,16]):RWI(5,16,2,32);
+  t.hits=RI(1,Math.max(1,Math.round(t.steps*(0.45+0.4*w)))); t.rot=RI(0,t.steps-1);
+  t.prob=chance(0.5-0.2*w)?100:RWI(45,95,5,100); t.swing=chance(0.7-0.3*w)?0:RWI(5,30,0,60); t.notes=[];
 }
 function rollNotes(t){
-  t.mode=chance(0.6)?"walk":"random"; t.pull=RI(10,70); t.oct=RI(2,5); t.span=chance(0.7)?1:2; t.notes=[];
+  t.mode=chance(0.6)?"walk":"random"; t.pull=RWI(10,70,0,100); t.oct=Math.max(1,Math.min(6,RWI(2,5,1,6)));
+  t.span=chance(0.7-0.3*wild())?1:RI(2,2+Math.round(wild())); t.notes=[];
 }
 function rollSound(t){
-  t.voice="m:"+pick(AMBIENT_VOICES);
-  t.harm=R(0.05,0.8); t.timb=R(0.05,0.8); t.morph=R(0.05,0.8); t.colour=R(0.1,0.6); t.mdecay=R(0.35,0.9);
-  t.ftype=chance(0.8)?"lowpass":pick(["bandpass","highpass"]);
-  t.cutoff=t.ftype==="lowpass"?R(0.35,0.85):t.ftype==="bandpass"?R(0.3,0.7):R(0.05,0.35);
-  t.res=R(0,0.45); t.fenv=chance(0.5)?0:R(-0.3,0.5); t.fdec=R(0.1,1.5);
+  t.voice="m:"+pick(wild()>0.8?MACRO.map(([i])=>i):AMBIENT_VOICES);   // Wild also allows the drum types
+  t.harm=RW(0.05,0.8,0,1); t.timb=RW(0.05,0.8,0,1); t.morph=RW(0.05,0.8,0,1); t.colour=RW(0.1,0.6,0,1); t.mdecay=RW(0.35,0.9,0.05,1);
+  t.ftype=chance(0.8-0.3*wild())?"lowpass":pick(["bandpass","highpass"]);
+  t.cutoff=t.ftype==="lowpass"?RW(0.35,0.85,0.15,1):t.ftype==="bandpass"?RW(0.3,0.7,0.15,0.9):RW(0.05,0.35,0,0.6);
+  t.res=RW(0,0.45,0,0.9); t.fenv=chance(0.5)?0:RW(-0.3,0.5,-1,1); t.fdec=RW(0.1,1.5,0.01,2);
 }
 function rollEnvelope(t){
   t.envMode=chance(0.7)?"adsr":"natural";
-  t.A=Math.exp(R(Math.log(0.01),Math.log(4))); t.D=R(0.2,3); t.S=R(0.4,0.9); t.R=R(0.5,6);
-  t.gate=pick([1,2,3,4,6,8,10,12]); t.tails=chance(0.4)?"ring":"cut";
+  t.A=Math.exp(R(Math.log(0.01),Math.log(4))); t.D=RW(0.2,3,0.02,4); t.S=RW(0.4,0.9,0,1); t.R=RW(0.5,6,0.05,8);
+  t.gate=wild()>0.3?pick([0.25,0.5,1,2,3,4,6,8,10,12,16]):pick([1,2,3,4,6,8,10,12]); t.tails=chance(0.4)?"ring":"cut";
 }
 function rollMovement(t){
   t.mods=Array.from({length:NMODS},()=>chance(0.4)?newMod():{src:pick(["lfo","lfo","lfo","hit","hit","pos","pitch"]), target:pick(MOD_TARGETS.slice(1))[0], shape:pick(["sine","triangle","random","drift"]),
-    rate:R(0.05,0.5), depth:(chance(0.5)?1:-1)*R(0.15,0.6), seed:Math.random()*100});
+    rate:RW(0.05,0.5,0,1), depth:(chance(0.5)?1:-1)*RW(0.15,0.6,0.05,1), seed:Math.random()*100});
 }
-function rollMix(t){ t.pan=R(-0.6,0.6); t.dSend=R(0,0.6); t.rSend=R(0.3,1); }
+function rollMix(t){ t.pan=RW(-0.6,0.6,-1,1); t.dSend=RW(0,0.6,0,1); t.rSend=RW(0.3,1,0,1); }
 function nudge(t){
   const step=(k,lo,hi,amt)=>{ t[k]=Math.max(lo,Math.min(hi,t[k]+R(-amt,amt)*(hi-lo))); };
   ["harm","timb","morph","colour","mdecay"].forEach(k=>step(k,0,1,0.08));
@@ -1206,13 +1257,19 @@ function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(
 /* ---- randomise the whole session (Global's dice): every shown orbit, the key, tempo and effects ----
    Levels, mutes, MIDI routing, master volume and the number of orbits stay as they are. */
 function randomiseAll(){
-  G.bpm=Math.round(R(40,110)); G.root=RI(0,11); G.scale=pick(Object.keys(SCALES));
-  FX.dMode=chance(0.6)?"sync":"free"; FX.dDiv=pick(DIVS)[0]; FX.dFree=+R(0.2,1.5).toFixed(3);
-  FX.dFb=R(0.3,0.75); FX.dTone=R(0.1,0.6); FX.dRet=R(0.2,0.6);
-  FX.rTime=R(0.7,0.98); FX.rDamp=R(0.1,0.7); FX.rPre=R(0,0.2); FX.rRet=R(0.6,1);
+  G.bpm=RWI(40,110,15,220);
+  if(!RAND.lockRoot) G.root=RI(0,11);
+  if(!RAND.lockScale) G.scale=pick(Object.keys(SCALES));
+  FX.dMode=chance(0.6)?"sync":"free"; FX.dDiv=pick(DIVS)[0]; FX.dFree=+RW(0.2,1.5,0.05,2).toFixed(3);
+  FX.dFb=RW(0.3,0.75,0.05,0.95); FX.dTone=RW(0.1,0.6,0,1); FX.dRet=RW(0.2,0.6,0,0.9);
+  FX.rTime=RW(0.7,0.98,0.3,1); FX.rDamp=RW(0.1,0.7,0,1); FX.rPre=RW(0,0.2,0,0.5); FX.rRet=RW(0.6,1,0.2,1);
   const idx=[]; for(let i=0;i<G.orbits;i++){ ROLLS.all[1](tracks[i]); idx.push(i); }
   orbitChanged(...idx); applyParams(); updateDials(); selectTab(sel);
   toast("Everything randomised. Use the undo arrow to go back.");
+}
+function rangeChooser(){
+  const w=seg(RAND,"range","How far",[["gentle","Gentle"],["wide","Wide"],["wild","Wild"]],saveRand);
+  w.classList.add("rangeseg"); return w;
 }
 function openGlobalRandom(anchor){
   let m=document.getElementById("omenu");
@@ -1221,8 +1278,10 @@ function openGlobalRandom(anchor){
   const mkI=(txt,fn,dis)=>{ const b=document.createElement("button"); b.className="btn"; b.setAttribute("role","menuitem"); b.textContent=txt; b.disabled=!!dis;
     b.onclick=()=>{ closeOrbitMenu(); fn&&fn(); }; return b; };
   const head=document.createElement("div"); head.className="ohead"; head.textContent="Randomise everything";
-  const note=document.createElement("div"); note.className="osub"; note.textContent="Every orbit's sound, pattern, motion and mix, plus tempo, key and effects. Levels, mutes and MIDI stay as they are.";
-  m.append(head,note,mkI("Randomise everything",randomiseAll),mkI("Cancel"));
+  const note=document.createElement("div"); note.className="osub";
+  const kept=[RAND.lockRoot&&"root",RAND.lockScale&&"scale"].filter(Boolean);
+  note.textContent="Every orbit's sound, pattern, motion and mix, plus tempo, "+(kept.length===2?"":kept[0]==="root"?"scale ":kept[0]==="scale"?"root ":"key, scale ")+"and effects. Levels, mutes and MIDI stay as they are"+(kept.length?", and the locked "+kept.join(" and ")+" too.":".");
+  m.append(head,note,rangeChooser(),mkI("Randomise everything",randomiseAll),mkI("Cancel"));
   m.hidden=false;
   const rr=anchor.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight, vw=document.documentElement.clientWidth, vh=window.innerHeight;
   m.style.left=Math.max(16,Math.min(vw-w-16,rr.right-w))+"px";
@@ -1247,7 +1306,7 @@ function openOrbitMenu(i,mode,anchor){
     row(item("Motion",()=>rollOrbit(i,"motion"),false,"Randomise motion"), item("Mix",()=>rollOrbit(i,"mix"),false,"Randomise mix")),
     item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything"),
     item("Nudge gently",()=>rollOrbit(i,"nudge"))];
-  if(mode==="random") m.append(div("ohead","Randomise orbit "+(i+1)),...randomRows(),item("Cancel"));
+  if(mode==="random") m.append(div("ohead","Randomise orbit "+(i+1)),rangeChooser(),...randomRows(),item("Cancel"));
   else m.append(div("ohead","Orbit "+(i+1)),
     row(item("Copy",()=>copyOrbit(i),false,"Copy settings"),
         item(canPaste?"Paste "+(orbitClip.from+1):"Paste",()=>pasteOrbit(i),!canPaste,canPaste?"Paste orbit "+(orbitClip.from+1)+"'s settings":"Paste (copy an orbit first)")),
@@ -1315,6 +1374,8 @@ const INFO={
     "Pre-delay: a short gap before the reverb starts."],
   "Global":[
     "Dice: randomises everything: every orbit, tempo, key and effects. Levels, mutes and MIDI stay as they are.",
+    "How far (in the dice menus): Gentle stays near the middle of each control, Wide reaches most of it, Wild uses everything (including the drum voices).",
+    "Lock (beside Root and Scale): keeps that setting when you use the dice.",
     "Tempo: speed for every orbit.",
     "Root, Scale: which notes every orbit can play.",
     "Orbits: one row of 4, or two rows of 8. Orbits 5–8 are saved with the session.",
@@ -1475,7 +1536,7 @@ function renderVoice(t){
       const lfoSrc=(m.src||"lfo")==="lfo", srcName=(MOD_SOURCES.find(([v])=>v===(m.src||"lfo"))||[0,"LFO"])[1];
       const tgtName=(()=>{ for(const o of modTargetOptions(t,m.target)){ if(o.group){ const f=o.items.find(([v])=>v===m.target); if(f) return f[1]; } else if(o[0]===m.target) return o[1]; } return m.target; })();
       const headEl=document.createElement("div"); headEl.className="modhead";
-      headEl.innerHTML=`<span class="modnum">${i+1}</span><span>Modulator ${i+1}</span><span class="modsum"></span>`;
+      headEl.innerHTML=`<span>Modulator ${i+1}</span><span class="modsum"></span>`;
       headEl.querySelector(".modsum").textContent=m.target==="off"?"Off":srcName+" \u2192 "+tgtName;
       const grid=pageGrid(
         choice(m,"src","Source",MOD_SOURCES,rerender),
@@ -1529,6 +1590,17 @@ function tempoControl(){
   row.append(slider(proxy,"p","Tempo",0,1,0.001,()=>G.bpm+" bpm",updateDials));
   return row;
 }
+// a padlock beside a Global control: when locked, the dice leaves that setting alone
+const LOCK_SVG=on=>on?'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+  :'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+function withLock(ctl,key,what){
+  const lab=ctl.querySelector(".label"), row=document.createElement("div"); row.className="lockrow";
+  const b=document.createElement("button"); b.className="lockbtn";
+  const sync=()=>{ b.innerHTML=LOCK_SVG(RAND[key])+`<span>${RAND[key]?"Locked":"Lock"}</span>`; b.setAttribute("aria-pressed",!!RAND[key]);
+    b.title=RAND[key]?"The dice won't change the "+what:"Keep the "+what+" when using the dice"; b.setAttribute("aria-label",(RAND[key]?"Unlock ":"Lock ")+what); };
+  b.onclick=()=>{ RAND[key]=!RAND[key]; saveRand(); sync(); };
+  sync(); lab.replaceWith(row); row.append(lab,b); return ctl;
+}
 function renderGlobal(){
   const gh=panelHead("Global","","--gl"); const [gi,gbox]=infoToggle("Global");
   const gd=mkBtn(""); gd.className="btn dice gdice"; gd.innerHTML=DICE_SVG; gd.title="Randomise everything"; gd.setAttribute("aria-label","Randomise everything");
@@ -1536,14 +1608,14 @@ function renderGlobal(){
   gh.append(gd,gi); panel.append(gbox);
   panel.append(pageGrid(
     full(tempoControl()),
-    choice(G,"root","Root",NOTES.map((n,i)=>[i,n]),updateDials),
-    scaleChoice(),
+    withLock(choice(G,"root","Root",NOTES.map((n,i)=>[i,n]),updateDials),"lockRoot","root"),
+    withLock(scaleChoice(),"lockScale","scale"),
     full(seg(G,"orbits","Orbits",[["4","4"],["8","8"]],()=>{ G.orbits=+G.orbits; showOrbits(); applyParams(); })),
     (()=>{ const h=hint(engineStatsText()); h.id="enginestats"; return h; })(),
     midiControls(),
     window.DA_APP?(()=>{ const w=document.createElement("div"); w.className="ctl full";
-      const h=hint("Music keeps playing with the screen off or in another app (a notification shows while it plays). If your phone still stops it, open the app's settings, choose Battery, and pick Unrestricted.");
-      const b=mkBtn("Open app settings"); b.onclick=()=>nativeCall("Background","openSettings").catch(()=>{});
+      const h=hint("Music keeps playing with the screen off or in another app, as long as notifications are allowed and battery use is Unrestricted.");
+      const b=mkBtn("Check phone settings"); b.onclick=openSetup;
       const l=document.createElement("span"); l.className="label"; l.textContent="Background playback"; w.append(l,h,b); b.style.alignSelf="flex-start"; return w; })():null,
     full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme))));
 }
