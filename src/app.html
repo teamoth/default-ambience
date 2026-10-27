@@ -79,10 +79,11 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
   padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .modal[hidden]{display:none}
 .ring{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
-.omenu{position:fixed;z-index:25;box-sizing:border-box;width:230px;max-height:calc(100vh - 20px);overflow:auto;background:var(--panel);border:2px solid var(--acc);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 24px color-mix(in srgb,#000 30%,transparent)}
+.omenu{position:fixed;z-index:25;box-sizing:border-box;width:min(290px,calc(100vw - 32px));overflow-x:hidden;max-height:calc(100vh - 20px);overflow:auto;background:var(--panel);border:2px solid var(--acc);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 24px color-mix(in srgb,#000 30%,transparent)}
 .omenu[hidden]{display:none}
 .omenu .ohead{font-size:var(--fs-ui);font-weight:600;padding:2px 4px}
 .omenu .rangeseg{margin:0 0 4px}
+.omenu .seg button{min-width:0;padding-left:4px;padding-right:4px}
 .omenu .rangeseg .label{font-size:calc(var(--fs-ui)*.9);opacity:.75;padding:0 4px}
 .omenu .btn{width:100%;padding-left:4px;padding-right:4px}
 .omenu .orow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
@@ -122,7 +123,7 @@ select{font:inherit;font-size:var(--fs-ui);background:var(--raise);color:var(--f
 .ring{--acc:var(--t1);font:inherit;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:16px;
   padding:4px 1px 3px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:0;border-radius:12px;min-width:0;transition:background .15s,border-color .15s}
 .ring{position:relative}
-.ring .onum{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;font-size:.66rem;font-weight:700;line-height:1;background:var(--acc);color:var(--bg)}
+.ring .onum{position:absolute;top:5px;left:8px;font-size:.72rem;font-weight:700;color:var(--acc);line-height:1}
 .ring canvas{width:100%;max-width:200px;aspect-ratio:1;height:auto}
 .ring .note{font-size:.7rem}
 .ring[aria-selected="true"]{background:var(--panel);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
@@ -157,7 +158,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .btn.icon.lockbtn[aria-pressed="true"]{color:var(--acc);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);background:var(--panel)}
 .btn.more{font-size:1.2rem;line-height:1}
 .btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center;flex:none}
-.vhead .oname{margin-left:auto;flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.9rem;background:var(--acc);color:var(--bg)}
+.vhead .oname{margin-left:auto;flex:none;width:30px;height:30px;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.9rem;border:2px solid var(--acc);color:var(--acc)}
 .vhead .ow{display:none}
 @media (max-width:370px){ .vhead{column-gap:6px} .vhead .btn{min-width:0;padding-left:8px;padding-right:8px} .vhead .btn.dice{width:34px} .vhead .info{width:28px;height:28px} }
 .pages{display:flex;gap:6px;flex:1;min-width:0}
@@ -199,12 +200,16 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .adsr{width:100%;height:70px;display:block}
 .blendbar[hidden]{display:none}
 .blendbar{--acc:var(--ss);display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:2px solid var(--acc);border-radius:12px;background:var(--panel)}
-.bnames{display:flex;justify-content:space-between;gap:12px;font-size:.78rem;font-weight:600;min-width:0}
+.bnames{display:flex;align-items:baseline;gap:6px;font-size:var(--fs-ui);font-weight:600;min-width:0}
+.bnames .btitle{color:var(--acc)}
+.bnames .barrow{opacity:.6;font-weight:400}
+.bnames #btime{margin-left:auto}
+.bbtns{display:flex;gap:8px;justify-content:flex-end}
 .bnames span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .brow{display:flex;align-items:center;gap:8px}
 #bslider{flex:1;min-width:0;padding:0 10px}
 #bslider .top{display:none}
-#btime{min-width:4.2em;text-align:right;font-variant-numeric:tabular-nums}
+#btime{min-width:4.2em;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .bbtn{min-width:34px;padding:2px 8px;flex:none}
 .tempo{display:flex;align-items:flex-end;gap:10px}
 .tempo .ctl{flex:1}
@@ -240,9 +245,9 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
     <button class="btn hist" id="redobtn" title="Redo" disabled><span>Redo</span><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="m15 14 5-5-5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
   <section class="rings" id="rings" role="tablist" aria-label="Orbits"></section>
   <section class="blendbar" id="blendbar" aria-label="Blend" hidden>
-    <div class="bnames"><span id="bfrom"></span><span id="bto"></span></div>
-    <div class="brow"><div id="bslider"></div><span class="note" id="btime"></span>
-      <button class="btn bbtn" id="bpause" aria-label="Pause drift"></button><button class="btn bbtn" id="bend" aria-label="End blend and keep this sound">&#x2715;</button></div>
+    <div class="bnames"><span class="btitle">Blend</span><span id="bfrom"></span><span class="barrow">→</span><span id="bto"></span><span class="note" id="btime"></span></div>
+    <div class="brow"><div id="bslider"></div></div>
+    <div class="bbtns"><button class="btn" id="bpause"></button><button class="btn" id="bend" title="End the blend and keep the sound as it is now">End blend</button></div>
   </section>
   <section class="dials" id="dials" aria-label="Transport and global settings">
     <button id="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playicon" d="M7 4l13 8-13 8z"/></svg></button>
@@ -285,7 +290,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.37";
+const APP_VERSION="1.38";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -1097,24 +1102,28 @@ function updateBlendBar(){
   document.getElementById("bfrom").textContent=BLEND.fromName;
   document.getElementById("bto").textContent=BLEND.toName;
   const left=(1-BLEND.pos)*BLEND.dur, mmss=x=>Math.floor(x/60)+":"+String(Math.floor(x%60)).padStart(2,"0");
-  document.getElementById("btime").textContent=BLEND.pos>=1?"Arrived":BLEND.dur>0&&BLEND.running?(playing?mmss(left):"On play"):Math.round(BLEND.pos*100)+"%";
+  document.getElementById("btime").textContent=BLEND.pos>=1?"Arrived":BLEND.dur>0&&BLEND.running?(playing?mmss(left):"Waits for Play"):Math.round(BLEND.pos*100)+"%";
   const pb=document.getElementById("bpause");
   pb.hidden=BLEND.dur<=0;
-  pb.textContent=BLEND.running?"\u275A\u275A":"\u25B6"; pb.setAttribute("aria-label",BLEND.running?"Pause drift":(BLEND.pos>=1?"Drift again from the start":"Resume drift"));
+  pb.textContent=BLEND.running?"Pause":(BLEND.pos>=1?"Again":"Resume");
 }
+function blendCheckpoint(){ if(typeof HIST!=="undefined"){ clearTimeout(HIST.timer); checkpoint(); } }
 function startBlend(fromSnap,toSnap,fromName,toName,dur){
+  blendCheckpoint();   // Undo can always go back to just before the blend started
   Object.assign(BLEND,{active:true,pos:0,from:clone(fromSnap),to:clone(toSnap),fromName,toName,dur,running:dur>0,side:{},held:new Set(),last:performance.now()});
   BLEND.from.tracks=BLEND.from.tracks||[]; BLEND.to.tracks=BLEND.to.tracks||[];
   document.getElementById("blendbar").hidden=false;
   applyBlend();
 }
-function endBlend(){ BLEND.active=false; BLEND.running=false; document.getElementById("blendbar").hidden=true; }
+function endBlend(){ const was=BLEND.active; BLEND.active=false; BLEND.running=false; document.getElementById("blendbar").hidden=true;
+  if(was) blendCheckpoint(); if(typeof sel!=="undefined"&&sel==="sessions") renderSessions(); }
 setInterval(()=>{   // drift moves the blend along, only while the music is playing
   const now=performance.now(), dt=(now-BLEND.last)/1000; BLEND.last=now;
   if(!BLEND.active||!BLEND.running||!playing||BLEND.dur<=0) return;
   BLEND.pos=Math.min(1,BLEND.pos+dt/BLEND.dur);
-  if(BLEND.pos>=1) BLEND.running=false;
+  const arrived=BLEND.pos>=1; if(arrived) BLEND.running=false;
   applyBlend();
+  if(arrived) blendCheckpoint();   // arriving is a step Undo can go back to
 },150);
 function restore(snap){
   if(!snap||!snap.G||!Array.isArray(snap.tracks)) throw new Error("not a session");
@@ -1216,7 +1225,7 @@ const chance=p=>Math.random()<p;
 const AMBIENT_VOICES=MACRO.map(([i])=>i).filter(i=>i<21);   // leave out the drum types
 /* How far randomising may wander, and what it leaves alone. Remembered on this device.
    Gentle keeps to the middle of each control; Wide reaches most of it; Wild uses the whole range. */
-const RAND={range:"wide", style:"ambient", lockRoot:false, lockScale:false};
+const RAND={range:"wide", style:"ambient", orbitStyle:"ambient", lockRoot:false, lockScale:false};
 try{ Object.assign(RAND,JSON.parse(localStorage.getItem("default-ambience-randomise")||"{}")); }catch(e){}
 const saveRand=()=>{ try{ localStorage.setItem("default-ambience-randomise",JSON.stringify(RAND)); }catch(e){} };
 const wild=()=>({gentle:0,wide:0.55,wild:1}[RAND.range]??0.55);
@@ -1228,6 +1237,7 @@ function rollRhythm(t){
   t.steps=w<0.2?pick([5,6,7,8,9,10,11,12,13,14,15,16,16,16]):RWI(5,16,2,32);
   t.hits=RI(1,Math.max(1,Math.round(t.steps*(0.45+0.4*w)))); t.rot=RI(0,t.steps-1);
   t.prob=chance(0.5-0.2*w)?100:RWI(45,95,5,100); t.swing=chance(0.7-0.3*w)?0:RWI(5,30,0,60); t.notes=[];
+  t.vel=RWI(80,110,40,127);   // velocity: around normal, wider as the setting gets wilder
 }
 function rollNotes(t){
   t.mode=chance(0.6)?"walk":"random"; t.pull=RWI(10,70,0,100); t.oct=Math.max(1,Math.min(6,RWI(2,5,1,6)));
@@ -1252,27 +1262,34 @@ function rollMovement(t){
 /* Percussive orbits: each gets a role (kick, snare, hats or a tuned percussion sound) chosen by its
    position, so a kit comes together across the orbits, with busier patterns and short, dry sounds. */
 const PERC_ROLES=["kick","snare","hats","perc","perc","hats","perc","perc"];
-function rollPerc(t,role){
-  role=role||pick(["kick","snare","hats","perc"]);
+// which percussion role an orbit plays, judged from its voice (a non-percussive voice gets a random role)
+function percRole(t){ const v=+String(t.voice).slice(2);
+  return v===21?"kick":v===22?"snare":v===23?"hats":[17,18,19,20,3].includes(v)?"perc":pick(["kick","snare","hats","perc"]); }
+function percSound(t,role){
+  Object.assign(t,{ftype:"lowpass",res:R(0,0.2),fenv:0,colour:R(0.3,0.7),mdecay:RW(0.2,0.5,0.05,0.8)});
+  if(role==="kick"){ t.voice="m:21"; t.harm=RW(0.2,0.6,0,1); t.timb=RW(0.2,0.5,0,1); t.morph=RW(0.3,0.7,0.1,1); t.cutoff=1; }
+  else if(role==="snare"){ t.voice="m:22"; t.harm=RW(0.3,0.7,0,1); t.timb=RW(0.3,0.7,0,1); t.morph=RW(0.2,0.6,0,1); t.cutoff=RW(0.8,1,0.5,1); }
+  else if(role==="hats"){ t.voice="m:23"; t.harm=RW(0.3,0.8,0,1); t.timb=RW(0.4,0.9,0,1); t.morph=RW(0.1,0.4,0,1); t.cutoff=1; }
+  else { t.voice="m:"+pick([20,19,18,17,3,20,19]); t.harm=RW(0.2,0.7,0,1); t.timb=RW(0.3,0.8,0,1); t.morph=RW(0.2,0.6,0,1); t.cutoff=RW(0.6,1,0.3,1); }
+}
+function percPattern(t,role){
   const w=wild();
-  Object.assign(t,{envMode:"natural",tails:"cut",gate:1,ftype:"lowpass",res:R(0,0.2),fenv:0,colour:R(0.3,0.7),notes:[],
-    mode:chance(0.5)?"walk":"random",swing:chance(0.5)?RI(5,25):0,prob:chance(0.6)?100:RWI(70,95,40,100),
-    pan:RW(-0.3,0.3,-0.8,0.8),dSend:RW(0,0.25,0,0.6),rSend:RW(0.05,0.35,0,0.8)});
-  if(role==="kick"){ t.voice="m:21"; t.oct=2; t.span=1; t.pull=90; t.steps=pick([8,12,16,16,16]); t.hits=RI(2,Math.max(2,Math.round(t.steps/4)));
-    t.harm=RW(0.2,0.6,0,1); t.timb=RW(0.2,0.5,0,1); t.morph=RW(0.3,0.7,0.1,1); t.cutoff=1; t.pan=0; }
-  else if(role==="snare"){ t.voice="m:22"; t.oct=3; t.span=1; t.pull=80; t.steps=pick([8,16,16,12]); t.hits=RI(1,Math.max(1,Math.round(t.steps/4)));
-    t.harm=RW(0.3,0.7,0,1); t.timb=RW(0.3,0.7,0,1); t.morph=RW(0.2,0.6,0,1); t.cutoff=RW(0.8,1,0.5,1); }
-  else if(role==="hats"){ t.voice="m:23"; t.oct=5; t.span=1; t.pull=50; t.steps=pick([8,12,16,16]); t.hits=RI(Math.round(t.steps*0.3),Math.round(t.steps*(0.7+0.3*w)));
-    t.harm=RW(0.3,0.8,0,1); t.timb=RW(0.4,0.9,0,1); t.morph=RW(0.1,0.4,0,1); t.cutoff=1; t.prob=RWI(65,100,30,100); }
-  else { t.voice="m:"+pick([20,19,18,17,3,20,19]); t.oct=RI(3,5); t.span=chance(0.5)?1:2; t.pull=RWI(20,60,0,100);
-    t.steps=pick([5,6,7,9,10,11,12,13,14,16]); t.hits=RI(1,Math.max(1,Math.round(t.steps*(0.3+0.3*w))));
-    t.harm=RW(0.2,0.7,0,1); t.timb=RW(0.3,0.8,0,1); t.morph=RW(0.2,0.6,0,1); t.cutoff=RW(0.6,1,0.3,1); }
-  t.mdecay=RW(0.2,0.5,0.05,0.8); t.rot=RI(0,t.steps-1);
-  // a little life: velocity varies a touch on every hit, and sometimes the tone does too
+  Object.assign(t,{notes:[],mode:chance(0.5)?"walk":"random",swing:chance(0.5)?RI(5,25):0,prob:chance(0.6)?100:RWI(70,95,40,100),vel:RWI(90,115,60,127)});
+  if(role==="kick"){ t.oct=2; t.span=1; t.pull=90; t.steps=pick([8,12,16,16,16]); t.hits=RI(2,Math.max(2,Math.round(t.steps/4))); }
+  else if(role==="snare"){ t.oct=3; t.span=1; t.pull=80; t.steps=pick([8,16,16,12]); t.hits=RI(1,Math.max(1,Math.round(t.steps/4))); }
+  else if(role==="hats"){ t.oct=5; t.span=1; t.pull=50; t.steps=pick([8,12,16,16]); t.hits=RI(Math.round(t.steps*0.3),Math.round(t.steps*(0.7+0.3*w))); t.prob=RWI(65,100,30,100); }
+  else { t.oct=RI(3,5); t.span=chance(0.5)?1:2; t.pull=RWI(20,60,0,100); t.steps=pick([5,6,7,9,10,11,12,13,14,16]); t.hits=RI(1,Math.max(1,Math.round(t.steps*(0.3+0.3*w)))); }
+  t.rot=RI(0,t.steps-1);
+}
+function percMotion(t){
+  // short and natural, with a little life: velocity varies on every hit, and sometimes the tone does too
+  Object.assign(t,{envMode:"natural",tails:"cut",gate:1});
   t.mods=newMods();
   t.mods[0]={...newMod(),src:"hit",target:"vel",depth:RW(0.15,0.35,0.05,0.7)};
   if(chance(0.5)) t.mods[1]={...newMod(),src:"hit",target:pick(["timb","morph","cutoff"]),depth:RW(0.1,0.3,0.05,0.6)};
 }
+function percMix(t,role){ t.pan=role==="kick"?0:RW(-0.3,0.3,-0.8,0.8); t.dSend=RW(0,0.25,0,0.6); t.rSend=RW(0.05,0.35,0,0.8); }
+function rollPerc(t,role){ role=role||pick(["kick","snare","hats","perc"]); percSound(t,role); percPattern(t,role); percMotion(t); percMix(t,role); }
 function rollMix(t){ t.pan=RW(-0.6,0.6,-1,1); t.dSend=RW(0,0.6,0,1); t.rSend=RW(0.3,1,0,1); }
 function nudge(t){
   const step=(k,lo,hi,amt)=>{ t[k]=Math.max(lo,Math.min(hi,t[k]+R(-amt,amt)*(hi-lo))); };
@@ -1283,21 +1300,22 @@ function nudge(t){
   if(chance(0.4)) t.rot=(t.rot+pick([-1,1])+t.steps)%t.steps;
   if(chance(0.25)) t.hits=Math.max(1,Math.min(t.steps,t.hits+pick([-1,1])));
 }
-// one option per tab, so each randomises exactly what that tab shows (MIDI routing and Level are never changed)
+// one option per tab, so each randomises exactly what that tab shows (MIDI routing and Volume are never changed)
 // the plain starting sound used by Reset and the Empty preset: the formant grain voice, centred, nothing detuned
 const PLAIN_VOICE={voice:"m:11", harm:0.5, timb:0.45, morph:0.35, colour:0.4, mdecay:0.5, cutoff:0.85, res:0.05, fenv:0};
+// the orbit dice follows its Style: Ambient or Percussive (each option randomises exactly what its tab shows)
+const percStyle=()=>RAND.orbitStyle==="percussive";
 const ROLLS={
-  sound:["randomise sound",t=>rollSound(t)],
-  pattern:["randomise pattern",t=>{rollRhythm(t);rollNotes(t);}],
-  motion:["randomise motion",t=>{rollEnvelope(t);rollMovement(t);}],
-  mix:["randomise mix",t=>rollMix(t)],
-  all:["randomise everything",t=>{rollSound(t);rollRhythm(t);rollNotes(t);rollEnvelope(t);rollMovement(t);rollMix(t);}],
-  perc:["make it percussive",t=>rollPerc(t)],
+  sound:["randomise sound",t=>percStyle()?percSound(t,percRole(t)):rollSound(t)],
+  pattern:["randomise pattern",t=>{ if(percStyle()) percPattern(t,percRole(t)); else { rollRhythm(t); rollNotes(t); } }],
+  motion:["randomise motion",t=>{ if(percStyle()) percMotion(t); else { rollEnvelope(t); rollMovement(t); } }],
+  mix:["randomise mix",t=>percStyle()?percMix(t,percRole(t)):rollMix(t)],
+  all:["randomise everything",t=>{ if(percStyle()) rollPerc(t); else { rollSound(t);rollRhythm(t);rollNotes(t);rollEnvelope(t);rollMovement(t);rollMix(t); } }],
   nudge:["nudge",t=>nudge(t)],
   reset:["reset",t=>{ Object.assign(t,clone(base),PLAIN_VOICE,{midi:t.midi,local:t.local,steps:16,hits:4,rot:0,oct:3,span:1,vol:0.6,lock:false,notes:[],mods:newMods()}); }],
 };
 function rollOrbit(i,kind){ const [label,fn]=ROLLS[kind]; remember(label,i); fn(tracks[i]); orbitChanged(i);
-  const done={perc:"new percussive sound",sound:"new sound",pattern:"new pattern",motion:"new motion",mix:"new mix",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
+  const done={sound:"new sound",pattern:"new pattern",motion:"new motion",mix:"new mix",all:"everything randomised",nudge:"nudged",reset:"reset"}[kind];
   toast("Orbit "+(i+1)+": "+done+". Undo brings it back."); }
 
 /* ---- randomise the whole session (Global's dice): every shown orbit, the key, tempo and effects ----
@@ -1316,7 +1334,10 @@ function randomiseAll(){
   if(style==="percussive") for(let i=0;i<G.orbits;i++) percIdx.add(i);
   else if(style==="mixed"){ const order=[...Array(G.orbits).keys()].sort(()=>Math.random()-0.5); order.slice(0,Math.ceil(G.orbits/2)).forEach(i=>percIdx.add(i)); }
   const idx=[]; let k=0;
-  for(let i=0;i<G.orbits;i++){ if(percIdx.has(i)) rollPerc(tracks[i],PERC_ROLES[k++%PERC_ROLES.length]); else ROLLS.all[1](tracks[i]); idx.push(i); }
+  for(let i=0;i<G.orbits;i++){ const t=tracks[i];
+    if(percIdx.has(i)) rollPerc(t,PERC_ROLES[k++%PERC_ROLES.length]);
+    else { rollSound(t);rollRhythm(t);rollNotes(t);rollEnvelope(t);rollMovement(t);rollMix(t); }
+    idx.push(i); }
   orbitChanged(...idx); applyParams(); updateDials(); selectTab(sel);
   toast("Everything randomised. Undo brings it back.");
 }
@@ -1333,12 +1354,12 @@ function openGlobalRandom(anchor){
   const head=document.createElement("div"); head.className="ohead"; head.textContent="Randomise everything";
   const note=document.createElement("div"); note.className="osub";
   const kept=[RAND.lockRoot&&"root",RAND.lockScale&&"scale"].filter(Boolean);
-  note.textContent="Every orbit's sound, pattern, motion and mix, plus tempo, "+(kept.length===2?"":kept[0]==="root"?"scale ":kept[0]==="scale"?"root ":"key, scale ")+"and effects. Levels, mutes and MIDI stay as they are"+(kept.length?", and the locked "+kept.join(" and ")+" too.":".");
+  note.textContent="Every orbit's sound, pattern, motion and mix, plus tempo, "+(kept.length===2?"":kept[0]==="root"?"scale ":kept[0]==="scale"?"root ":"key, scale ")+"and effects. Volumes, mutes and MIDI stay as they are"+(kept.length?", and the locked "+kept.join(" and ")+" too.":".");
   const sty=seg(RAND,"style","Style",[["ambient","Ambient"],["percussive","Percussive"],["mixed","Mixed"]],saveRand); sty.classList.add("rangeseg");
   m.append(head,note,sty,rangeChooser(),mkI("Randomise everything",randomiseAll),mkI("Cancel"));
   m.hidden=false;
   const rr=anchor.getBoundingClientRect(), w=m.offsetWidth, h=m.offsetHeight, vw=document.documentElement.clientWidth, vh=window.innerHeight;
-  m.style.left=Math.max(16,Math.min(vw-w-16,rr.right-w))+"px";
+  m.style.left=Math.max(16,Math.min(vw-w-16,rr.right-w))+"px"; m.scrollLeft=0;
   m.style.top=Math.max(10,Math.min(vh-h-10,rr.bottom+6))+"px";
   setTimeout(()=>document.addEventListener("pointerdown",outsideMenu,true),0);
 }
@@ -1358,9 +1379,10 @@ function openOrbitMenu(i,mode,anchor){
   const randomRows=()=>[
     row(item("Sound",()=>rollOrbit(i,"sound"),false,"Randomise sound"), item("Pattern",()=>rollOrbit(i,"pattern"),false,"Randomise pattern")),
     row(item("Motion",()=>rollOrbit(i,"motion"),false,"Randomise motion"), item("Mix",()=>rollOrbit(i,"mix"),false,"Randomise mix")),
-    row(item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything"), item("Percussive",()=>rollOrbit(i,"perc"),false,"Randomise as a percussive sound")),
+    item("Everything",()=>rollOrbit(i,"all"),false,"Randomise everything"),
     item("Nudge gently",()=>rollOrbit(i,"nudge"))];
-  if(mode==="random") m.append(div("ohead","Randomise orbit "+(i+1)),rangeChooser(),...randomRows(),item("Cancel"));
+  if(mode==="random"){ const sty=seg(RAND,"orbitStyle","Style",[["ambient","Ambient"],["percussive","Percussive"]],saveRand); sty.classList.add("rangeseg");
+    m.append(div("ohead","Randomise orbit "+(i+1)),sty,rangeChooser(),...randomRows(),item("Cancel")); }
   else m.append(div("ohead","Orbit "+(i+1)),
     row(item("Copy",()=>copyOrbit(i),false,"Copy settings"),
         item(canPaste?"Paste "+(orbitClip.from+1):"Paste",()=>pasteOrbit(i),!canPaste,canPaste?"Paste orbit "+(orbitClip.from+1)+"'s settings":"Paste (copy an orbit first)")),
@@ -1417,17 +1439,17 @@ const INFO={
     "Every orbit feeds this delay through its Delay send (Mix + MIDI tab).",
     "Timing: Tempo synced follows the tempo; Free sets the time in milliseconds.",
     "Time: the gap between echoes.",
-    "Level: how loud the echoes are.",
+    "Volume: how loud the echoes are.",
     "Repeats: how many echoes you hear. Each echo is a little softer and darker than the last."],
   "Reverb":[
     "Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab).",
-    "Level: how loud the reverb is.",
+    "Volume: how loud the reverb is.",
     "Decay time: the length of the tail.",
     "Damping: darkens the tail.",
     "Pre-delay: a short gap before the reverb starts."],
   "Global":[
-    "Dice: randomises everything: every orbit, tempo, key and effects. Levels, mutes and MIDI stay as they are.",
-    "Style (in the dice menu): Ambient, Percussive (a kit of kick, snare, hats and tuned percussion across the orbits) or Mixed (about half and half).",
+    "Dice: randomises everything: every orbit, tempo, key and effects. Volumes, mutes and MIDI stay as they are.",
+    "Style (in the dice menus): Ambient, Percussive (a kit of kick, snare, hats and tuned percussion across the orbits) or Mixed (about half and half). Each orbit's dice has its own Ambient or Percussive style.",
     "How far (in the dice menus): Gentle stays near the middle of each control, Wide reaches most of it, Wild uses everything (including the drum voices).",
     "Padlock (beside Root and Scale): keeps that setting when you use the dice.",
     "Tempo: speed for every orbit.",
@@ -1440,10 +1462,12 @@ const INFO={
     "MIDI output: where orbits with a MIDI channel send their notes (Chrome or Edge; the browser asks permission the first time).",
     "Theme: dark or light."],
   "Blend":[
-    "Moves from one session to another. Levels, filters and tempo glide; choices like voice type and rhythm switch partway, one orbit at a time.",
-    "Drift time: let it move by itself while playing, or drag the bar under the orbits by hand.",
+    "Moves from one session to another. Volumes, filters and tempo glide; choices like voice type and rhythm switch partway, one orbit at a time.",
+    "From, To: any preset or saved session (From can also be what's playing now).",
+    "Time: how long it takes by itself while playing, or By hand only to drag the bar under the orbits.",
+    "Pause / Resume and End blend are on the bar. Undo goes back to before the blend, or to where it arrived.",
     "Touching a control during a blend keeps that setting where you put it.",
-    "The cross on the bar ends the blend and keeps the sound as it is."],
+    "End blend keeps the sound exactly as it is at that moment."],
   "Session":[
     "Now playing: the session you last loaded or saved, and whether you've changed it since.",
     "Choose a session: the built-in presets, then your own sessions. Load plays it; Rename, Save over and Delete work on your own sessions.",
@@ -1459,7 +1483,7 @@ const MAIN_INFO=[
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Undo and Redo at the top take back or redo any change, up to 100 steps.",
   "Touch an orbit to open all of its settings underneath, in four tabs: Sound (voice and filter), Pattern (rhythm and notes), Motion (envelope and modulation) and Mix + MIDI (sends, pan and MIDI channel).",
-  "At the top of each orbit's panel: Mute, Solo, the dice (randomise, including a percussive option) and ⋯ (copy, paste, swap with another orbit, or reset). Pressing and holding an orbit opens the same ⋯ menu. Copied settings survive loading another session.",
+  "At the top of each orbit's panel: Mute, Solo, the dice (randomise, in an ambient or percussive style) and ⋯ (copy, paste, swap with another orbit, or reset). Pressing and holding an orbit opens the same ⋯ menu. Copied settings survive loading another session.",
   "Buttons below the orbits: Play starts and stops everything. Global has the tempo, key and scale, the number of orbits (4 or 8), the audio engine settings, MIDI and the colour theme, plus a dice that randomises everything. Master has the overall volume and the shared delay and reverb. Session has the presets and your saved sessions, codes to share and back up, and Blend, which moves from one session to another.",
   "The [i] button on each page explains its controls.",
   "All the sounds in Default Ambience are compiled from the open-source synthesiser code written by Emilie Gillet (see [credits] at bottom of page).",
@@ -1528,7 +1552,7 @@ function renderVoice(t){
   const more=mk("\u22EF","Copy, paste, swap or reset this orbit"); more.classList.add("dice","more"); more.setAttribute("aria-label","More: copy, paste, swap, reset");
   more.onclick=()=>openOrbitMenu(ti,undefined,more);
   const oname=document.createElement("span"); oname.className="oname"; oname.innerHTML=`<span class="ow">Orbit </span>${ti+1}`; oname.setAttribute("aria-label","Orbit "+(ti+1));
-  head.append(mute,solo,dice,more,oname,slider(t,"vol","Level",0,1,0.01,pct));
+  head.append(mute,solo,dice,more,oname,slider(t,"vol","Volume",0,1,0.01,pct));
 
   const pages=["Sound","Pattern","Motion","Mix + MIDI"];
   if(!pages.includes(voicePage)) voicePage=pages[0];
@@ -1723,10 +1747,10 @@ function renderMaster(){
     page=pageGrid(
     full(seg(FX,"dMode","Timing",[["sync","Tempo synced"],["free","Free"]],renderMaster,true)),
     dial,
-    slider(FX,"dRet","Level",0,1,0.01,pct,updateDials),
+    slider(FX,"dRet","Volume",0,1,0.01,pct,updateDials),
     slider(FX,"dFb","Repeats",0,1,0.01,pct));
   } else page=pageGrid(
-    slider(FX,"rRet","Level",0,1,0.01,pct,updateDials), slider(FX,"rTime","Decay time",0,1,0.01,pct),
+    slider(FX,"rRet","Volume",0,1,0.01,pct,updateDials), slider(FX,"rTime","Decay time",0,1,0.01,pct),
     slider(FX,"rDamp","Damping",0,1,0.01,pct), slider(FX,"rPre","Pre-delay",0,0.25,0.005,v=>Math.round(v*1000)+" ms"));
   panel.append(vol,...withInfo(nav,fxPage),page);
 }
@@ -1876,24 +1900,30 @@ function sessionsBody(){
 }
 function blendBody(){
   const wrap=document.createElement("div"); wrap.className="page";
-  wrap.append(sectHead("Blend between two sessions"),
-    hint("Glide from one setup to another, by hand or over time. A bar appears under the orbits while a blend is running."));
-  if(BLEND.active) wrap.append(hint(`A blend from “${BLEND.fromName}” to “${BLEND.toName}” is running. Starting a new one replaces it.`));
-  // blend: glide from one setup to another, by hand or over time
-  const bl=document.createElement("div"); bl.className="ctl full"; bl.style.cssText="gap:10px";
+  wrap.append(hint("Glide from one session to another, by itself over a set time while playing, or by hand with the bar that appears under the orbits. Undo goes back to before the blend."));
+  if(BLEND.active){
+    const st=document.createElement("div"); st.className="ctl full"; st.style.gap="8px";
+    const pc=Math.round(BLEND.pos*100);
+    st.append(hint(`Blending from “${BLEND.fromName}” to “${BLEND.toName}”: ${BLEND.pos>=1?"arrived":pc+"%"+(BLEND.running?"":", paused")}. Starting a new blend replaces it.`));
+    const end=mkBtn("End blend"); end.title="End the blend and keep the sound as it is now"; end.onclick=endBlend; end.style.alignSelf="flex-start";
+    st.append(end); wrap.append(st);
+  }
   const saved=loadSessions();
-  const sources=[...PRESETS.map((p,i)=>["p"+i,p.name+" (preset)"]),...saved.map((x,i)=>["s"+i,x.name])];
-  const BS=sessionsBody.blend||(sessionsBody.blend={from:"now",to:sources.length>1?sources[sources.length-1][0]:"p0",dur:300});
-  if(!sources.some(([v])=>v===BS.to)) BS.to="p0";
-  const fromC=choice(BS,"from","From",[["now","What's playing now"],...sources]);
-  const toC=choice(BS,"to","To",sources);
-  const durC=choice(BS,"dur","Drift",[[0,"By hand only"],[30,"30 seconds"],[60,"1 minute"],[120,"2 minutes"],[300,"5 minutes"],[600,"10 minutes"],[1200,"20 minutes"],[1800,"30 minutes"]]);
-  const go=mkBtn("Start blend"); go.style.alignSelf="stretch"; go.classList.add("primary");
+  const sessionOpts=now=>[...(now?[["now","What's playing now"]]:[]),{group:"Presets",items:PRESETS.map((p,i)=>["p"+i,p.name])},
+    ...(saved.length?[{group:"Your sessions",items:saved.map((x,i)=>["s"+i,x.name])}]:[])];
+  const all=[...PRESETS.map((p,i)=>"p"+i),...saved.map((x,i)=>"s"+i)];
+  const BS=sessionsBody.blend||(sessionsBody.blend={from:"now",to:all[all.length-1],dur:300});
+  if(!all.includes(BS.to)) BS.to="p0";
+  if(BS.from!=="now"&&!all.includes(BS.from)) BS.from="now";
+  const fromC=full(choice(BS,"from","From",sessionOpts(true)));
+  const toC=full(choice(BS,"to","To",sessionOpts(false)));
+  const durC=full(choice(BS,"dur","Time",[[0,"By hand only"],[30,"30 seconds"],[60,"1 minute"],[120,"2 minutes"],[300,"5 minutes"],[600,"10 minutes"],[1200,"20 minutes"],[1800,"30 minutes"]]));
+  const go=mkBtn(BLEND.active?"Start a new blend":"Start blend"); go.classList.add("primary");
   const getSrc=v=>v==="now"?[snapshot(),"Now"]:v[0]==="p"?[PRESETS[+v.slice(1)].data,PRESETS[+v.slice(1)].name]:[saved[+v.slice(1)].data,saved[+v.slice(1)].name];
   go.onclick=()=>{ const [fa,fn]=getSrc(BS.from), [ta,tn]=getSrc(BS.to); startBlend(fa,ta,fn,tn,+BS.dur);
     renderSessions(); window.scrollTo({top:0,behavior:"smooth"}); };
-  const grid=pageGrid(fromC,toC,durC); grid.style.gridTemplateColumns="1fr";
-  bl.append(grid,go); wrap.append(bl);
+  const gw=document.createElement("div"); gw.className="ctl full"; gw.append(go);
+  wrap.append(fromC,toC,durC,gw);
   panel.append(wrap);
 }
 // The startup sound: a session saved from the app and built in as the default
