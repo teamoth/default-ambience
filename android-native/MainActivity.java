@@ -1,5 +1,6 @@
 package timbient.defaultambience;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
@@ -11,6 +12,11 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(BackgroundPlugin.class);
         super.onCreate(savedInstanceState);
+        // By default Android lowers the priority of the page's process as soon as the app is out of view,
+        // which starves the audio of processing time and causes glitches in the background. Keep it important.
+        if (Build.VERSION.SDK_INT >= 26 && bridge != null && bridge.getWebView() != null) {
+            bridge.getWebView().setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
+        }
     }
 
     @Override

@@ -151,8 +151,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .vhead .ctl{flex:1 1 100%}   /* Level gets its own full-width row under i and Mute */
 .vhead .btn{flex:none;min-width:56px}
 .lockrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.lockbtn{font:inherit;font-size:.75rem;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;height:24px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
-.lockbtn[aria-pressed="true"]{color:var(--acc);border-color:var(--acc)}
+.btn.icon.lockbtn{height:auto;width:44px;color:var(--muted)}
+.btn.icon.lockbtn[aria-pressed="true"]{color:var(--acc);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);background:var(--panel)}
 .btn.more{font-size:1.2rem;line-height:1}
 .btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center;flex:none}
 .vhead .oname{margin-left:auto;font-weight:600;font-size:var(--fs-ui);color:var(--acc);white-space:nowrap}
@@ -184,7 +184,16 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 @media (max-width:370px){ .pages{gap:4px} .pages button{font-size:.76rem;padding-left:4px;padding-right:4px} }
 .page{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;min-width:0}
 .page .full{grid-column:1 / -1}
-.hint{color:var(--muted);font-size:var(--fs-ui);margin:0;max-width:60ch}
+.hint{color:var(--muted);font-size:.8rem;line-height:1.45;margin:0;max-width:60ch}
+.subhead{font-size:var(--fs-ui);font-weight:600;color:var(--fg);margin:0}
+.meterrow{display:flex;align-items:center;gap:10px;min-height:22px}
+.meter{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.meter span{display:block;height:100%;width:0;background:var(--t8);transition:width .4s}
+.meter span[data-level="high"]{background:var(--t1)}
+.meter span[data-level="over"]{background:var(--t3)}
+.mtext{font-family:var(--mono);font-size:.75rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.selrow{display:flex;gap:8px;align-items:stretch}
+.selrow select{flex:1;min-width:0}
 .adsr{width:100%;height:70px;display:block}
 .blendbar[hidden]{display:none}
 .blendbar{--acc:var(--ss);display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:2px solid var(--acc);border-radius:12px;background:var(--panel)}
@@ -274,7 +283,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.34";
+const APP_VERSION="1.35";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -424,9 +433,19 @@ function makeDriveCurve(){ // gentle tape-style saturation with unity gain for q
   for(let i=0;i<n;i++){const x=i/(n-1)*2-1; c[i]=Math.tanh(k*x)/k;}
   return c;
 }
+/* Engine settings (Master > Engine), remembered on this device.
+   Buffer: a bigger buffer gives the phone more time to work out each moment of sound, so busy moments
+   (other apps, the screen off) are less likely to glitch; the cost is a slightly later response to touches.
+   Quality: a lower sample rate means fewer calculations per second; the sound loses some very high treble. */
+const AUDIO={buffer:"steady", rate:48000};
+try{ Object.assign(AUDIO,JSON.parse(localStorage.getItem("default-ambience-audio")||"{}")); }catch(e){}
+const saveAudio=()=>{ try{ localStorage.setItem("default-ambience-audio",JSON.stringify(AUDIO)); }catch(e){} };
+const LATENCY={fast:"interactive",balanced:"balanced",steady:"playback"};
 function initAudio(){
-  try{ ctx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:48000}); }
-  catch(e){ ctx=new (window.AudioContext||window.webkitAudioContext)(); }
+  const AC=window.AudioContext||window.webkitAudioContext;
+  try{ ctx=new AC({sampleRate:+AUDIO.rate||48000, latencyHint:LATENCY[AUDIO.buffer]||"playback"}); }
+  catch(e){ try{ ctx=new AC({sampleRate:48000}); }catch(e2){ ctx=new AC(); } }
+  ctx.__latency=LATENCY[AUDIO.buffer]||"playback";
   pitchComp=12*Math.log2(48000/ctx.sampleRate);
   const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-12; comp.ratio.value=4;
   master=ctx.createGain(); master.connect(comp); comp.connect(ctx.destination);
@@ -482,12 +501,6 @@ function initAudio(){
 
 let enginesReady=null;
 let ENGINE_STATS=null;
-function engineStatsText(){
-  const s=ENGINE_STATS; if(!s) return "Sound engine load: shown while playing.";
-  const pc=Math.round(s.load*100), word=pc<25?"low":pc<50?"moderate":pc<75?"high":"very high";
-  return "Sound engine load: "+word+" ("+pc+"%), "+s.voices+(s.voices===1?" voice":" voices")+" playing."+
-    (s.steals?" "+s.steals+(s.steals===1?" note was":" notes were")+" shortened to keep the sound smooth.":"");
-}
 async function loadEngines(){
   macroState="loading"; setStatus("Loading sound engines…");
   try{
@@ -501,7 +514,7 @@ async function loadEngines(){
     await Promise.all([ready(macroNode),ready(RV.node)]);
     tracks.forEach((t,i)=>macroNode.connect(t.vca,i));
     RV.low.disconnect(); RV.low.connect(RV.node); RV.node.connect(RV.ret);
-    macroNode.port.onmessage=e=>{ if(e.data.type==="stats"){ ENGINE_STATS=e.data; const el=document.getElementById("enginestats"); if(el) el.textContent=engineStatsText(); } };
+    macroNode.port.onmessage=e=>{ if(e.data.type==="stats"){ ENGINE_STATS=e.data; updateEngineMeter(); } };
     macroState="ready"; setStatus(""); applyParams();
   }catch(err){
     macroState="failed"; setStatus("The sound engine couldn't load here ("+err.message+"), so the rings are silent. Try reloading, or a recent version of Chrome.");
@@ -799,6 +812,7 @@ async function start(){
 }
 function stop(){
   playing=false; clearInterval(timer); visQ.length=0;
+  setTimeout(updateEngineMeter,0);
   nativeCall("Background","stop").catch(()=>{});
   if(macroNode) macroNode.port.postMessage({type:"clear"});
   midiAllOff();
@@ -1366,6 +1380,11 @@ const INFO={
     "Level: how loud the echoes are.",
     "Repeats: how many echoes you hear.",
     "Tone: how dark the echoes get."],
+  "Engine":[
+    "Sound engine load: how much of the phone's time the voices take. If it gets too busy, a fading or old note is shortened to keep the sound smooth.",
+    "Buffer: Steady glitches least when the phone is busy (for example in the background); Fast responds quickest to touches; Balanced is in between.",
+    "Quality: Best is 48 kHz. Lighter (32 kHz) and Lightest (24 kHz) do less work, with a little less high treble.",
+    "Both are remembered on this device. Apply now restarts the sound engine with them; press Play again afterwards."],
   "Reverb":[
     "Every orbit feeds this reverb through its Reverb send (Mix + MIDI tab).",
     "Level: how loud the reverb is.",
@@ -1375,11 +1394,10 @@ const INFO={
   "Global":[
     "Dice: randomises everything: every orbit, tempo, key and effects. Levels, mutes and MIDI stay as they are.",
     "How far (in the dice menus): Gentle stays near the middle of each control, Wide reaches most of it, Wild uses everything (including the drum voices).",
-    "Lock (beside Root and Scale): keeps that setting when you use the dice.",
+    "Padlock (beside Root and Scale): keeps that setting when you use the dice.",
     "Tempo: speed for every orbit.",
     "Root, Scale: which notes every orbit can play.",
     "Orbits: one row of 4, or two rows of 8. Orbits 5–8 are saved with the session.",
-    "Sound engine load: how hard the phone is working. If it gets too busy, a fading or old note is shortened to keep the sound smooth.",
     "MIDI output: where orbits with a MIDI channel send their notes (Chrome or Edge; the browser asks permission the first time).",
     "Theme: dark or light."],
   "Blend":[
@@ -1594,12 +1612,12 @@ function tempoControl(){
 const LOCK_SVG=on=>on?'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
   :'<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 function withLock(ctl,key,what){
-  const lab=ctl.querySelector(".label"), row=document.createElement("div"); row.className="lockrow";
-  const b=document.createElement("button"); b.className="lockbtn";
-  const sync=()=>{ b.innerHTML=LOCK_SVG(RAND[key])+`<span>${RAND[key]?"Locked":"Lock"}</span>`; b.setAttribute("aria-pressed",!!RAND[key]);
-    b.title=RAND[key]?"The dice won't change the "+what:"Keep the "+what+" when using the dice"; b.setAttribute("aria-label",(RAND[key]?"Unlock ":"Lock ")+what); };
+  const sel=ctl.querySelector("select"), row=document.createElement("div"); row.className="selrow";
+  const b=document.createElement("button"); b.className="btn icon lockbtn";
+  const sync=()=>{ b.innerHTML=LOCK_SVG(RAND[key]); b.setAttribute("aria-pressed",!!RAND[key]);
+    b.title=RAND[key]?"Locked: the dice won't change the "+what:"Lock the "+what+" so the dice leaves it alone"; b.setAttribute("aria-label",(RAND[key]?"Unlock ":"Lock ")+what); };
   b.onclick=()=>{ RAND[key]=!RAND[key]; saveRand(); sync(); };
-  sync(); lab.replaceWith(row); row.append(lab,b); return ctl;
+  sync(); sel.replaceWith(row); row.append(sel,b); return ctl;
 }
 function renderGlobal(){
   const gh=panelHead("Global","","--gl"); const [gi,gbox]=infoToggle("Global");
@@ -1611,20 +1629,46 @@ function renderGlobal(){
     withLock(choice(G,"root","Root",NOTES.map((n,i)=>[i,n]),updateDials),"lockRoot","root"),
     withLock(scaleChoice(),"lockScale","scale"),
     full(seg(G,"orbits","Orbits",[["4","4"],["8","8"]],()=>{ G.orbits=+G.orbits; showOrbits(); applyParams(); })),
-    (()=>{ const h=hint(engineStatsText()); h.id="enginestats"; return h; })(),
     midiControls(),
     window.DA_APP?(()=>{ const w=document.createElement("div"); w.className="ctl full";
       const h=hint("Music keeps playing with the screen off or in another app, as long as notifications are allowed and battery use is Unrestricted.");
       const b=mkBtn("Check phone settings"); b.onclick=openSetup;
-      const l=document.createElement("span"); l.className="label"; l.textContent="Background playback"; w.append(l,h,b); b.style.alignSelf="flex-start"; return w; })():null,
+      const l=document.createElement("span"); l.className="label"; l.textContent="Background playback"; w.append(l,h,b); w.style.gap="6px"; b.style.alignSelf="flex-start"; return w; })():null,
     full(seg(PREF,"theme","Theme",[["light","Light"],["dark","Dark"]],chooseTheme))));
+}
+function applyAudioNow(){
+  try{ sessionStorage.setItem("default-ambience-resume",JSON.stringify({snap:snapshot(),sel})); }catch(e){}
+  location.reload();
+}
+function engineMeter(){
+  const w=document.createElement("div"); w.className="ctl full";
+  w.innerHTML=`<span class="label">Sound engine load</span><div class="meterrow"><div class="meter"><span id="emfill"></span></div><span class="mtext" id="emtext"></span></div>`;
+  setTimeout(updateEngineMeter,0); return w;
+}
+function updateEngineMeter(){
+  const f=document.getElementById("emfill"), t=document.getElementById("emtext"); if(!f||!t) return;
+  const s=ENGINE_STATS;
+  if(!s||!playing){ f.style.width="0%"; t.textContent="shown while playing"; return; }
+  const pc=Math.round(s.load*100);
+  f.style.width=Math.min(100,pc)+"%"; f.dataset.level=pc<50?"ok":pc<75?"high":"over";
+  t.textContent=pc+"% \u00b7 "+s.voices+(s.voices===1?" voice":" voices")+(s.steals?" \u00b7 "+s.steals+" shortened":"");
 }
 function renderMaster(){
   panelHead("Master","","--fx");
   const vol=slider(G,"master","Master volume",0,1,0.01,pct,updateDials); vol.classList.add("levelrow");
-  const nav=pageTabs(["Delay","Reverb"],fxPage,n=>{fxPage=n; renderMaster();});
+  const nav=pageTabs(["Delay","Reverb","Engine"],fxPage,n=>{fxPage=n; renderMaster();});
   let page;
-  if(fxPage==="Delay"){
+  if(fxPage==="Engine"){
+    const pending=ctx&&((LATENCY[AUDIO.buffer]!==(ctx.__latency||LATENCY.steady))||(+AUDIO.rate!==ctx.sampleRate));
+    const apply=document.createElement("div"); apply.className="ctl full";
+    if(pending){ const b=mkBtn("Apply now"); b.onclick=applyAudioNow; apply.append(hint("These take effect when the sound engine restarts. Apply now restarts it and keeps all your settings; then press Play again."),b); b.style.alignSelf="flex-start"; }
+    page=pageGrid(engineMeter(),
+      full(seg(AUDIO,"buffer","Buffer",[["fast","Fast"],["balanced","Balanced"],["steady","Steady"]],()=>{ saveAudio(); renderMaster(); })),
+      hint("Steady gives the phone the most time for each moment of sound, so it glitches least when other apps are busy. Fast responds quickest to touches."),
+      full(seg(AUDIO,"rate","Quality",[["48000","Best"],["32000","Lighter"],["24000","Lightest"]],()=>{ AUDIO.rate=+AUDIO.rate; saveAudio(); renderMaster(); })),
+      hint("Lighter does about a third less work and Lightest about half, with a little less sparkle in the very highest treble."),
+      apply.childNodes.length?apply:null);
+  } else if(fxPage==="Delay"){
     const free=FX.dMode==="free";
     const proxy=free
       ? {holds:"dFree", get p(){return Math.log(FX.dFree/0.02)/Math.log(100);}, set p(v){FX.dFree=+(0.02*Math.pow(100,v)).toFixed(3);}}
@@ -1821,6 +1865,9 @@ const PRESETS=[
       harm:0.2, timb:0.3, morph:0.3, mdecay:0.5, colour:0.4, cutoff:0.8, dSend:0.2, rSend:0.3, pan:[-0.3,0.3,-0.15,0,0.45,-0.45,0.15,-0.1][i]})))}
 ];
 restore(DEFAULT_SESSION);
+// coming back from "Apply now" in Master > Engine: pick up exactly where things were
+try{ const resume=sessionStorage.getItem("default-ambience-resume");
+  if(resume){ sessionStorage.removeItem("default-ambience-resume"); const r=JSON.parse(resume); restore(r.snap); if(r.sel!=null) selectTab(r.sel); } }catch(e){}
 /* ================= one Undo / Redo for everything =================
    After any change settles, the whole setup is remembered (up to 100 steps). Undo and Redo move through
    those steps. Melodies that aren't locked keep playing as they are (they change all the time while
