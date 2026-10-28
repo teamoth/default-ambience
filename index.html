@@ -170,7 +170,10 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .levelrow{padding-bottom:10px;border-bottom:1px solid var(--line)}
 .vhead{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .vhead .tname{font-size:1rem;flex:none}
-.vhead .ctl{flex:1 1 100%}   /* Level gets its own full-width row under i and Mute */
+.vhead .ctl{flex:1 1 100%}
+.kindrow{margin:2px 0 4px}
+.btn[hidden]{display:none!important}
+.btn.rec{color:#e5484d;border-color:color-mix(in srgb,#e5484d 60%,var(--line))}   /* Level gets its own full-width row under i and Mute */
 .vhead .btn{flex:none;min-width:56px}
 .lockrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .btn.icon.lockbtn{height:auto;width:44px;color:var(--muted)}
@@ -314,7 +317,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.42";
+const APP_VERSION="1.43";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -372,7 +375,8 @@ const base = {prob:100, pull:20, mode:"random", decay:0.5, harm:0.4, timb:0.5, m
   pan:0, dSend:0.2, rSend:0.3, ftype:"lowpass", cutoff:1, res:0.1, fenv:0, fdec:0.3,
   envMode:"natural", A:0.01, D:0.3, S:0.6, R:0.4, gate:1, tails:"cut", swing:0,
   midi:0, local:"on", vel:100,
-};   // vel: velocity of each hit, 1-127 like MIDI (100 = normal loudness)   // midi: channel 1-16 this orbit sends notes on (0 = off); local: play its own sound
+  // looper orbits: kind "loop" turns the orbit into a looper (see the looper section)
+  kind:"seq", loopSrc:"mic", loopOrbit:0, loopFile:"", loopId:"", loopDir:"fwd", loopSpeed:"1", loopFade:0, loopStart:0, loopLen:1};   // vel: velocity of each hit, 1-127 like MIDI (100 = normal loudness)   // midi: channel 1-16 this orbit sends notes on (0 = off); local: play its own sound
 const newMod=()=>({src:"lfo", target:"off", shape:"sine", rate:0.35, depth:0.5, seed:Math.random()*100});
 const NMODS=4;   // modulators per orbit
 const newMods=()=>Array.from({length:NMODS},newMod);
@@ -531,6 +535,104 @@ function initAudio(){
   enginesReady=loadEngines();
 }
 
+/* ================= looper orbits =================
+   A looper orbit records sound (from the microphone, another orbit, or a sound file) and plays it round and
+   round at its own length, so loops of different lengths drift against each other. The recording itself runs in
+   the audio thread (Looper in macro-worklet.js). Loop audio is kept on this device (IndexedDB) and sessions refer
+   to it by an id, so it's saved with sessions but not inside session codes. */
+let micNode=null, micStream=null;
+async function ensureMic(){
+  if(micNode) return micNode;
+  micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+  micNode=ctx.createMediaStreamSource(micStream); return micNode;
+}
+// on-device storage for loop audio
+const LOOPDB={db:null};
+function loopDB(){ return LOOPDB.db||(LOOPDB.db=new Promise((res,rej)=>{ const r=indexedDB.open("default-ambience-loops",1);
+  r.onupgradeneeded=()=>r.result.createObjectStore("loops"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); })); }
+async function loopPut(id,data,sr){ const db=await loopDB(); return new Promise((res,rej)=>{ const tx=db.transaction("loops","readwrite"); tx.objectStore("loops").put({data,sr},id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function loopGet(id){ const db=await loopDB(); return new Promise((res,rej)=>{ const q=db.transaction("loops").objectStore("loops").get(id); q.onsuccess=()=>res(q.result||null); q.onerror=()=>rej(q.error); }); }
+async function loopsTidy(){   // on start-up: forget loop audio no saved session refers to any more
+  try{ const keep=new Set(); loadSessions().forEach(it=>(it.data.tracks||[]).forEach(st=>st&&st.loopId&&keep.add(st.loopId)));
+    const db=await loopDB(), tx=db.transaction("loops","readwrite"), st=tx.objectStore("loops");
+    const r=st.getAllKeys(); r.onsuccess=()=>r.result.forEach(k=>{ if(!keep.has(k)) st.delete(k); }); }catch(e){}
+}
+const newLoopId=()=>"loop-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
+// make sure each looper orbit has its looper, fed by the right source and playing the right loop
+function syncLoopers(){
+  if(!ctx||macroState!=="ready") return;
+  tracks.forEach((t,i)=>{
+    if(t.kind!=="loop"){ if(t.looper){ const old=t.looper; old.port.onmessage=null; old.port.postMessage({cmd:"dispose"});
+        try{ old.disconnect(); }catch(e){} if(t.loopIn) try{ t.loopIn.disconnect(old); }catch(e){} t.looper=null; t.loopIn=null; t.loopState=null; } return; }
+    if(!t.looper){
+      t.looper=new AudioWorkletNode(ctx,"looper",{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
+      t.looper.connect(t.strip); t.loopState={mode:"idle",len:0,pos:0}; t.loadedId=null;
+      t.looper.port.onmessage=e=>{ const d=e.data;
+        if(d.type==="pos"){ const was=t.loopState&&t.loopState.mode; t.loopState=d; if(sel===i&&(was!==d.mode)) refreshLoopStatus(t); }
+        else if(d.type==="data"&&t.saveCb){ const cb=t.saveCb; t.saveCb=null; cb(d.data); } };
+      t.looper.port.postMessage({cmd:"run",on:playing});
+    }
+    // source
+    const want=t.loopSrc==="mic"?(micNode||null):t.loopSrc==="orbit"?(tracks[t.loopOrbit]&&tracks[t.loopOrbit].kind!=="loop"&&t.loopOrbit!==i?tracks[t.loopOrbit].strip:null):null;
+    if(t.loopIn!==want){ if(t.loopIn) try{ t.loopIn.disconnect(t.looper); }catch(e){} t.loopIn=want; if(want) want.connect(t.looper); }
+    // playback settings
+    t.looper.port.postMessage({cmd:"set",reverse:t.loopDir==="rev",speed:+t.loopSpeed||1,fade:t.loopFade*0.25,start:t.loopStart,length:t.loopLen});
+    // the loop's audio
+    if(t.loadedId!==t.loopId){ const id=t.loopId; t.loadedId=id;
+      if(!id) t.looper.port.postMessage({cmd:"clear"});
+      else loopGet(id).then(r=>{ if(t.loopId!==id||!t.looper) return; if(r&&r.data) t.looper.port.postMessage({cmd:"load",data:r.data}); else { t.looper.port.postMessage({cmd:"clear"}); toast("Orbit "+(i+1)+": its loop isn't on this device"); } }).catch(()=>{});
+    }
+  });
+}
+// after a recording or overdub: keep a copy of the loop on the device, under a new id
+function storeLoop(t){
+  if(!t.looper) return;
+  t.saveCb=data=>{ if(!data.length) return; const id=newLoopId(); t.loopId=id; t.loadedId=id;
+    loopPut(id,data,ctx.sampleRate).then(()=>{ if(typeof changeSoon==="function") changeSoon(); }).catch(()=>toast("The loop couldn't be saved on this device")); };
+  t.looper.port.postMessage({cmd:"get"});
+}
+async function loopRecord(t){
+  if(!ctx) initAudio(); ctx.resume(); await enginesReady;
+  if(t.loopSrc==="mic"){ try{ await ensureMic(); }catch(e){ toast("The microphone isn't available (permission needed)"); return; } }
+  syncLoopers(); if(!t.looper) return;
+  if(t.loopSrc==="orbit"&&!t.loopIn){ toast("Choose an orbit to record from"); return; }
+  t.looper.port.postMessage({cmd:"record"}); t.loopState={...t.loopState,mode:"record"}; refreshLoopStatus(t);
+}
+function loopStop(t){
+  if(!t.looper) return;
+  const wasRecording=t.loopState&&(t.loopState.mode==="record"||t.loopState.mode==="overdub");
+  t.looper.port.postMessage({cmd:"stop"}); t.loopState={...t.loopState,mode:"idle"};
+  if(wasRecording) storeLoop(t);
+  refreshLoopStatus(t);
+}
+function loopOverdub(t){
+  if(!t.looper||!(t.loopState&&t.loopState.len)) return;
+  if(t.loopState.mode==="overdub"){ loopStop(t); return; }
+  t.looper.port.postMessage({cmd:"overdub",on:true}); t.loopState={...t.loopState,mode:"overdub"}; refreshLoopStatus(t);
+}
+async function loopFromFile(t){
+  try{
+    const text=null; void text;
+    const file=await new Promise((res,rej)=>{ const inp=document.createElement("input"); inp.type="file"; inp.accept="audio/*,.wav,.mp3,.ogg,.flac,.m4a";
+      inp.onchange=()=>inp.files&&inp.files[0]?res(inp.files[0]):rej(new Error("No file chosen")); inp.click(); });
+    if(!ctx) initAudio(); ctx.resume(); await enginesReady; syncLoopers();
+    const audio=await ctx.decodeAudioData(await file.arrayBuffer());
+    const n=Math.min(audio.length,Math.floor(audio.sampleRate*60)), mono=new Float32Array(n);
+    for(let c=0;c<audio.numberOfChannels;c++){ const ch=audio.getChannelData(c); for(let i=0;i<n;i++) mono[i]+=ch[i]/audio.numberOfChannels; }
+    const id=newLoopId(); await loopPut(id,mono,ctx.sampleRate);
+    t.loopId=id; t.loopFile=file.name; t.loadedId=id; t.looper.port.postMessage({cmd:"load",data:mono});
+    toast("Loaded "+file.name+(audio.length>n?" (first 60 seconds)":"")); changeSoon(); renderVoice(t);
+  }catch(e){ if(e&&e.message!=="No file chosen") toast("That file couldn't be loaded as audio"); }
+}
+function loopClear(t){ t.loopId=""; t.loopFile=""; t.loadedId=""; if(t.looper) t.looper.port.postMessage({cmd:"clear"}); changeSoon(); refreshLoopStatus(t); }
+function loopStatusText(t){
+  const st=t.loopState||{mode:"idle",len:0};
+  if(st.mode==="record") return "Recording\u2026";
+  if(st.mode==="overdub") return "Overdubbing: new sound is being layered on the loop.";
+  if(!st.len&&!t.loopId) return "Empty: record something or load a file.";
+  return "Loop: "+(st.len||0).toFixed(1)+" s"+(playing?"":" (plays when you press Play)");
+}
+function refreshLoopStatus(t){ if(sel!==tracks.indexOf(t)) return; renderVoice(t); }
 let enginesReady=null;
 let ENGINE_STATS=null;
 async function loadEngines(){
@@ -555,10 +657,12 @@ async function loadEngines(){
 
 function applyParams(instant){
   if(!ctx) return;
+  syncLoopers();
   const n=ctx.currentTime, tc=instant?0.001:0.03, set=(p,v)=>p.setTargetAtTime(v,n,tc);
   set(master.gain,G.master);
   tracks.forEach(t=>{
-    set(t.strip.gain,t.vol); set(t.panner.pan,t.pan); set(t.dSendG.gain,t.dSend*0.7); set(t.rSendG.gain,t.rSend*0.8);
+    const ti=tracks.indexOf(t), loopSilent=t.kind==="loop"&&(t.mute||ti>=G.orbits||(soloIdx>=0&&soloIdx!==ti));
+    set(t.strip.gain,loopSilent?0:t.vol); set(t.panner.pan,t.pan); set(t.dSendG.gain,t.dSend*0.7); set(t.rSendG.gain,t.rSend*0.8);
     t.filter.type=t.ftype; set(t.filter.Q,resQ(t.res));
     if(t.fenv===0) set(t.filter.frequency,cutoffHz(t.cutoff));
     if(t.envMode!==t.appliedMode){   // natural: always open; ADSR: closed until a note opens it
@@ -815,7 +919,7 @@ function schedule(){
       const pos=tick%t.steps, pat=euclid(t.hits,t.steps,t.rot);
       if(pos===0) modLoopStart(t,nextTime,t.steps*stepDur);
       let name=null;
-      if(pat[pos]){
+      if(pat[pos]&&t.kind!=="loop"){   // looper orbits don't play notes
         let d;
         if(t.lock && t.notes[pos]!=null) d=t.notes[pos]; else { d=nextDegree(t); t.notes[pos]=d; }
         if(ti<G.orbits && !t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
@@ -853,6 +957,7 @@ async function start(){
   document.getElementById("play").removeAttribute("aria-busy");
   playing=true; tick=0; nextTime=ctx.currentTime+0.06;
   timer=setInterval(schedule,25); schedule();
+  tracks.forEach(t=>t.looper&&t.looper.port.postMessage({cmd:"run",on:true}));
   nativeCall("Background","start").catch(()=>{});   // Android app: keep playing in the background
   document.getElementById("playicon").setAttribute("d","M6 5h4v14H6zM14 5h4v14h-4z");
   document.getElementById("play").setAttribute("aria-label","Stop");
@@ -860,6 +965,7 @@ async function start(){
 }
 function stop(){
   playing=false; clearInterval(timer); visQ.length=0;
+  tracks.forEach(t=>t.looper&&t.looper.port.postMessage({cmd:"run",on:false}));
   setTimeout(updateEngineMeter,0);
   nativeCall("Background","stop").catch(()=>{});
   if(macroNode) macroNode.port.postMessage({type:"clear"});
@@ -968,7 +1074,7 @@ const hz=v=>{const f=cutoffHz(v); return f>=1000?(f/1000).toFixed(1)+" kHz":Math
 
 /* ---- rings ---- */
 const ringsEl=document.getElementById("rings"), panel=document.getElementById("panel"), dialsEl=document.getElementById("dials");
-let sel=0, voicePage="Pattern", fxPage="Delay";
+let sel=0, voicePage="Pattern", loopPage="Loop", fxPage="Delay";
 const DIALS=[["global","Global","--gl"],["master","Master","--fx"],["sessions","Session","--ss"]];
 const dialEls={};
 DIALS.forEach(([key,name,col])=>{
@@ -1168,7 +1274,7 @@ setInterval(()=>{   // drift moves the blend along, only while the music is play
 // Loading a session keeps your choice of 4 or 8 orbits, and only switches to 8 by itself when the session
 // actually uses orbits 5–8. Undo/Redo and "Apply now" put everything back exactly (exact=true).
 // (a session counts as using them only if it was saved with 8 orbits showing and has hits in orbits 5–8)
-const usesUpperOrbits=snap=>+((snap.G||{}).orbits)===8&&(snap.tracks||[]).slice(4).some(st=>st&&st.hits>0&&!st.mute);
+const usesUpperOrbits=snap=>+((snap.G||{}).orbits)===8&&(snap.tracks||[]).slice(4).some(st=>st&&!st.mute&&(st.kind==="loop"?!!st.loopId:st.hits>0));
 function restore(snap,exact){
   if(!snap||!snap.G||!Array.isArray(snap.tracks)) throw new Error("not a session");
   if(typeof BLEND!=="undefined"&&BLEND.active) endBlend();
@@ -1257,7 +1363,7 @@ function swapOrbits(a,b){ remember("swap",a,b); const da=orbitData(a), db=orbitD
   if(soloIdx===a) soloIdx=b; else if(soloIdx===b) soloIdx=a; updateSolo(); toast("Orbits "+(a+1)+" and "+(b+1)+" swapped"); }
 function startSwap(i){ swapFrom=i; tracks[i].ringEl.classList.add("swapsrc"); toast("Tap the orbit to swap with"); }
 function endSwap(){ if(swapFrom!==null) tracks[swapFrom].ringEl.classList.remove("swapsrc"); swapFrom=null; }
-function updateSolo(){ tracks.forEach((t,i)=>t.ringEl.classList.toggle("soloout",soloIdx>=0&&soloIdx!==i)); }
+function updateSolo(){ tracks.forEach((t,i)=>t.ringEl.classList.toggle("soloout",soloIdx>=0&&soloIdx!==i)); applyParams(); }
 function toggleSolo(i){ soloIdx=soloIdx===i?-1:i;
   // soloing a muted orbit unmutes it, so Solo always means "hear this one"
   if(soloIdx===i&&tracks[i].mute){ blendHold(tracks[i],"mute"); tracks[i].mute=false; tracks[i].ringEl.classList.remove("muted");
@@ -1382,6 +1488,7 @@ function randomiseAll(){
   else if(style==="mixed"){ const order=[...Array(G.orbits).keys()].sort(()=>Math.random()-0.5); order.slice(0,Math.ceil(G.orbits/2)).forEach(i=>percIdx.add(i)); }
   const idx=[]; let k=0;
   for(let i=0;i<G.orbits;i++){ const t=tracks[i];
+    if(t.kind==="loop") continue;   // looper orbits keep their loops
     if(percIdx.has(i)) rollPerc(t,PERC_ROLES[k++%PERC_ROLES.length]);
     else { rollSound(t);rollRhythm(t);rollNotes(t);rollEnvelope(t);rollMovement(t);rollMix(t); }
     idx.push(i); }
@@ -1475,6 +1582,18 @@ const INFO={
     "Source: LFO (a slow wave, with Shape and Rate), Random per hit, Pattern position (rises through each loop) or Note pitch.",
     "Target: the setting it moves: velocity, a voice control, the filter, the envelope or pan.",
     "Depth: how far it moves. Negative moves the other way."],
+  "Loop":[
+    "Orbit type: Looper records sound and plays it round and round, at whatever length you record. Loops of different lengths drift against each other.",
+    "Record from: the Microphone, An orbit (the sound of one of the sequencer orbits), or A sound file from your device (up to 60 seconds).",
+    "Record: press to start, press again to stop; the loop then plays whenever the music is playing.",
+    "Overdub: layers new sound over the loop as it plays. Clear empties it.",
+    "Direction, Speed: play the loop forwards or backwards, at half, normal or double speed (which also changes its pitch).",
+    "Fade: each time round, the loop gets a little quieter, so it slowly dissolves (and overdubs build up and fade like tape loops).",
+    "Start, Length: play just part of the recording.",
+    "Loops are saved with your sessions on this device. Session codes and backups don't include the audio."],
+  "Loop mix":[
+    "Delay send, Reverb send: how much of the loop goes to the shared delay and reverb.",
+    "Pan: left or right."],
   "Mix + MIDI":[
     "Delay send, Reverb send: how much goes to the shared delay and reverb (adjusted in Master).",
     "Pan: left or right.",
@@ -1586,7 +1705,7 @@ function renderVoice(t){
   const mute=mk("Mute","Silence this voice");
   mute.setAttribute("aria-pressed",t.mute);
   mute.id="mutebtn";
-  mute.onclick=()=>{blendHold(t,"mute"); t.mute=!t.mute; mute.setAttribute("aria-pressed",t.mute); t.ringEl.classList.toggle("muted",t.mute);
+  mute.onclick=()=>{blendHold(t,"mute"); t.mute=!t.mute; mute.setAttribute("aria-pressed",t.mute); t.ringEl.classList.toggle("muted",t.mute); applyParams();
     // muting the soloed orbit ends the solo, rather than leaving everything silent
     if(t.mute&&soloIdx===tracks.indexOf(t)){ soloIdx=-1; updateSolo(); const sb=document.getElementById("solobtn"); if(sb) sb.setAttribute("aria-pressed","false"); toast("Solo off"); } };
   const ti=tracks.indexOf(t);
@@ -1598,7 +1717,51 @@ function renderVoice(t){
   const more=mk("\u22EF","Copy, paste, swap or reset this orbit"); more.classList.add("dice","more"); more.setAttribute("aria-label","More: copy, paste, swap, reset");
   more.onclick=()=>openOrbitMenu(ti,undefined,more);
   const oname=document.createElement("span"); oname.className="oname"; oname.innerHTML=`<span class="ow">Orbit </span>${ti+1}`; oname.setAttribute("aria-label","Orbit "+(ti+1));
+  const isLoop=t.kind==="loop";
+  if(isLoop) dice.hidden=true;   // randomising is for sequencer orbits
   head.append(mute,solo,dice,more,oname,slider(t,"vol","Volume",0,1,0.01,pct));
+  // orbit type: a Euclidean sequencer or a looper
+  const kindSeg=full(seg(t,"kind","Orbit type",[["seq","Sequencer"],["loop","Looper"]],()=>{ t.nnEl.textContent=t.kind==="loop"?"Loop":"\u2013"; t.sig=""; applyParams(); rerender(); }));
+  kindSeg.classList.add("kindrow");
+  if(isLoop){
+    const pagesL=["Loop","Mix"]; if(!pagesL.includes(loopPage)) loopPage="Loop";
+    const navL=pageTabs(pagesL,loopPage,n=>{loopPage=n; rerender();});
+    const sect=txt=>{const d=document.createElement("div"); d.className="secthead full"; d.textContent=txt; return d;};
+    let pg;
+    if(loopPage==="Loop"){
+      const st=t.loopState||{mode:"idle",len:0}, rec=st.mode==="record", od=st.mode==="overdub", has=!!(st.len||t.loopId);
+      const status=hint(loopStatusText(t)); status.classList.add("full"); status.id="loopstatus";
+      const srcOrbits=tracks.map((o,k)=>[k,"Orbit "+(k+1)]).filter(([k])=>k!==ti&&tracks[k].kind!=="loop"&&k<G.orbits);
+      const recRow=document.createElement("div"); recRow.className="btns full";
+      if(t.loopSrc==="file"){
+        const pickF=mkBtn(t.loopFile?"Choose another file":"Choose a sound file"); pickF.onclick=()=>loopFromFile(t); recRow.append(pickF);
+      } else {
+        const recB=mkBtn(rec?"\u25A0 Stop recording":"\u25CF Record"); recB.classList.add(rec?"armed":"rec");
+        recB.onclick=()=>rec?loopStop(t):loopRecord(t);
+        const odB=mkBtn(od?"\u25A0 Stop overdub":"Overdub"); odB.disabled=!has||rec; odB.onclick=()=>loopOverdub(t); odB.title="Layer new sound over the loop as it plays";
+        recRow.append(recB,odB);
+      }
+      const clr=mkBtn("Clear"); clr.disabled=!has||rec; twoTap(clr,"Clear",()=>loopClear(t)); recRow.append(clr);
+      pg=pageGrid(sect("Source"),
+        full(seg(t,"loopSrc","Record from",[["mic","Microphone"],["orbit","An orbit"],["file","A sound file"]],()=>{ applyParams(); rerender(); })),
+        t.loopSrc==="orbit"?full(srcOrbits.length?choice(t,"loopOrbit","Orbit to record",srcOrbits,applyParams):hint("No sequencer orbits to record from.")):null,
+        t.loopSrc==="mic"?hint("Headphones stop the loop picking up the phone's own speaker."):null,
+        t.loopSrc==="file"&&t.loopFile?hint("File: "+t.loopFile):null,
+        sect("Loop"), status, recRow,
+        sect("Playback"),
+        full(seg(t,"loopDir","Direction",[["fwd","Forward"],["rev","Reverse"]],applyParams)),
+        full(seg(t,"loopSpeed","Speed",[["0.5","Half"],["1","Normal"],["2","Double"]],applyParams)),
+        slider(t,"loopFade","Fade",0,1,0.01,v=>v===0?"Off":pct(v),applyParams),
+        slider(t,"loopStart","Start",0,0.95,0.01,pct,applyParams),
+        slider(t,"loopLen","Length",0.05,1,0.01,pct,applyParams));
+    } else {
+      pg=pageGrid(sect("Sends"),slider(t,"dSend","Delay send",0,1,0.01,pct), slider(t,"rSend","Reverb send",0,1,0.01,pct),
+        full(slider(t,"pan","Pan",-1,1,0.01,v=>v===0?"Centre":(v<0?"L ":"R ")+Math.round(Math.abs(v)*100))));
+    }
+    const [viL,vboxL]=infoToggle(loopPage==="Loop"?"Loop":"Loop mix"); head.prepend(viL);
+    panel.append(head,kindSeg,navL,vboxL,pg);
+    return;
+  }
 
   const pages=["Sound","Pattern","Motion","Mix + MIDI"];
   if(!pages.includes(voicePage)) voicePage=pages[0];
@@ -1686,7 +1849,7 @@ function renderVoice(t){
   }
   const [vi,vbox]=infoToggle(voicePage);
   head.prepend(vi);   // top row: i and Mute; Level underneath, lined up with the page's other sliders
-  panel.append(head,nav,vbox,page);
+  panel.append(head,kindSeg,nav,vbox,page);
 }
 
 function panelHead(title,sub,acc){
@@ -1997,6 +2160,7 @@ const PRESETS=[
       harm:0.5, timb:0.45, morph:0.35, mdecay:0.5, colour:0.4, cutoff:0.85, res:0.05, dSend:0.2, rSend:0.3, pan:[-0.3,0.3,-0.15,0,0.45,-0.45,0.15,-0.1][i]})))}
 ];
 restore(DEFAULT_SESSION);
+setTimeout(loopsTidy,3000);   // tidy away loop audio that no saved session uses
 // coming back from "Apply now" in Master > Engine: pick up exactly where things were
 try{ const resume=sessionStorage.getItem("default-ambience-resume");
   if(resume){ sessionStorage.removeItem("default-ambience-resume"); const r=JSON.parse(resume); restore(r.snap,true); if(r.sel!=null) selectTab(r.sel); } }catch(e){}
@@ -2043,6 +2207,30 @@ selectTab(0);
 /* ================= ring drawing ================= */
 
 let lastDraw=0;
+// a looper orbit's ring: the loop as a circle, with the playhead going round (red while recording)
+function drawLoopRing(t,ti,now,line,muted,fg,bg){
+  const st=t.loopState||{mode:"idle",len:0,pos:0}, rec=st.mode==="record", od=st.mode==="overdub";
+  const sig=["loop",st.mode,(st.len||0).toFixed(1),Math.round((st.pos||0)*240),sel===ti,cssGen,playing,rec?Math.floor(now/400)%2:0].join();
+  if(sig===t.sig) return; t.sig=sig;
+  const c=t.canvas.getContext("2d"), R=134, cx=160, cy=160, col=css(t.color), red="#e5484d";
+  c.clearRect(0,0,320,320);
+  c.beginPath(); c.arc(cx,cy,R,0,Math.PI*2); c.strokeStyle=line; c.lineWidth=5; c.stroke();
+  const has=st.len>0;
+  if(has){
+    const a0=-Math.PI/2, a1=a0+(st.pos||0)*Math.PI*2;
+    // the loop's window (Start and Length) as a coloured arc, and the playhead
+    const ws=-Math.PI/2+t.loopStart*Math.PI*2, we=ws+(1-t.loopStart)*t.loopLen*Math.PI*2;
+    c.beginPath(); c.arc(cx,cy,R,ws,we); c.strokeStyle=col; c.globalAlpha=0.45; c.lineWidth=9; c.stroke(); c.globalAlpha=1;
+    if(playing||od){ c.beginPath(); c.arc(cx+Math.cos(a1)*R,cy+Math.sin(a1)*R,15,0,Math.PI*2); c.fillStyle=od?red:fg; c.fill(); }
+    void a0;
+  }
+  if(rec){ c.beginPath(); c.arc(cx,cy-R,16,0,Math.PI*2); c.fillStyle=red; c.globalAlpha=Math.floor(now/400)%2?1:0.4; c.fill(); c.globalAlpha=1; }
+  c.beginPath(); c.arc(cx,cy,72,0,Math.PI*2); c.fillStyle=rec?red:col; c.globalAlpha=0.12; c.fill(); c.globalAlpha=1;
+  c.fillStyle=fg; c.textAlign="center"; c.textBaseline="middle";
+  c.font="600 46px 'IBM Plex Mono', monospace";
+  c.fillText(rec?"REC":has?(st.len<10?st.len.toFixed(1):Math.round(st.len))+"s":"\u2013",cx,cy);
+  if(t.nnEl.textContent!=="Loop") t.nnEl.textContent="Loop";
+}
 function draw(){
   if(ctx){
     while(visQ.length && visQ[0].time<=ctx.currentTime){
@@ -2055,6 +2243,7 @@ function draw(){
   lastDraw=now;
   const line=css("--line"), muted=css("--muted"), fg=css("--fg"), bg=css("--bg");
   tracks.forEach((t,ti)=>{
+    if(t.kind==="loop"){ drawLoopRing(t,ti,now,line,muted,fg,bg); return; }
     const pulseOn=now-t.flash<420;
     const sig=[t.pos,t.hits,t.steps,t.rot,t.lock,sel===ti,cssGen,pulseOn?Math.round((now-t.flash)/30):-1].join();
     if(sig===t.sig) return; t.sig=sig;
