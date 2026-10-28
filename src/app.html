@@ -292,7 +292,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.42";
+const APP_VERSION="1.44";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -742,14 +742,13 @@ function nativeCall(plugin,method,opts){
   return Promise.reject(new Error("no bridge"));
 }
 window.daNativeStop=()=>{ if(playing) stop(); };   // the notification's Stop button
-// Android audio focus (see BackgroundPlugin): another app starting to play stops Default Ambience, as music apps
-// do with each other; a short interruption (a call) pauses and then carries on; a spoken prompt just lowers the volume.
-let focusPaused=false;
+// Android audio focus (see BackgroundPlugin): another app properly starting to play (a music app) stops
+// Default Ambience, as music apps do with each other. Brief interruptions (alerts, notifications, calls, spoken
+// prompts) only dip the volume smoothly while they last: stopping and restarting for each one caused pops and gaps.
 window.daAudioFocus=what=>{
-  if(what==="loss"){ focusPaused=false; if(playing){ stop(); toast("Stopped because another app started playing"); } }
-  else if(what==="pause"){ if(playing){ focusPaused=true; stop(); } }
-  else if(what==="duck"){ if(master&&ctx) master.gain.setTargetAtTime(G.master*0.3,ctx.currentTime,0.1); }
-  else if(what==="resume"){ if(master&&ctx) master.gain.setTargetAtTime(G.master,ctx.currentTime,0.1); if(focusPaused){ focusPaused=false; start(); } }
+  if(what==="loss"){ if(playing){ stop(); toast("Stopped because another app started playing"); } }
+  else if(what==="pause"||what==="duck"){ if(master&&ctx) master.gain.setTargetAtTime(G.master*(what==="pause"?0.1:0.3),ctx.currentTime,0.25); }
+  else if(what==="resume"){ if(master&&ctx) master.gain.setTargetAtTime(G.master,ctx.currentTime,0.4); }
 };
 // going out of view (another app, screen off): queue the next 1.6 s of notes straight away, before the
 // browser slows its timers down, so nothing is left waiting at the moment of switching
