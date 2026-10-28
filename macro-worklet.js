@@ -182,3 +182,55 @@ class TextureReverb extends AudioWorkletProcessor {
   }
 }
 registerProcessor("texture-reverb", TextureReverb);
+
+// Per-orbit effects that need sample-by-sample processing: Lo-fi and Freeze.
+// Lo-fi: fewer bits and a lower sample rate (a = bits, b = rate).
+// Freeze: records into a 4-second loop and plays it back as overlapping soft grains, so the sound smears
+// into a cloud; Hold blends new sound into the loop more slowly (at full Hold it stops recording and stays frozen).
+class OrbitFx extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+    this.type = (options.processorOptions && options.processorOptions.type) || "lofi";
+    this.a = 0.5; this.b = 0.5;
+    this.port.onmessage = (ev) => { const d = ev.data; if (d.a != null) this.a = d.a; if (d.b != null) this.b = d.b; };
+    this.hold = 0; this.count = 0;
+    this.len = Math.floor(sampleRate * 4); this.buf = new Float32Array(this.len); this.w = 0;
+    this.grains = []; for (let i = 0; i < 4; i++) this.grains.push({ pos: 0, age: 1, len: 1 });
+  }
+  process(inputs, outputs) {
+    const inp = inputs[0] && inputs[0][0], out = outputs[0][0];
+    if (!out) return true;
+    const n = out.length;
+    if (this.type === "lofi") {
+      const bits = 16 - this.a * 13, q = Math.pow(2, bits - 1), step = 1 + Math.floor(this.b * 31);
+      for (let i = 0; i < n; i++) {
+        if (this.count <= 0) { this.hold = inp ? Math.round(inp[i] * q) / q : 0; this.count = step; }
+        this.count--; out[i] = this.hold;
+      }
+      return true;
+    }
+    // freeze
+    const buf = this.buf, len = this.len, keep = Math.min(1, this.b * 1.02), gl = Math.floor(sampleRate * (0.06 + this.a * 0.9));
+    for (let i = 0; i < n; i++) {
+      const x = inp ? inp[i] : 0;
+      if (keep < 1) buf[this.w] = buf[this.w] * keep + x * (1 - keep);
+      this.w = (this.w + 1) % len;
+      let y = 0;
+      for (let g = 0; g < 4; g++) {
+        const gr = this.grains[g];
+        if (gr.age >= gr.len) {   // start a new grain somewhere in the recent past
+          gr.len = gl; gr.age = -Math.floor(Math.random() * gl * 0.5) - g * (gl >> 2);
+          gr.pos = (this.w - gl - Math.floor(Math.random() * (len - 2 * gl)) + len * 2) % len;
+        }
+        if (gr.age >= 0) {
+          const ph = gr.age / gr.len, win = 0.5 - 0.5 * Math.cos(2 * Math.PI * ph);
+          y += buf[(gr.pos + gr.age) % len] * win;
+        }
+        gr.age++;
+      }
+      out[i] = y * 0.6;
+    }
+    return true;
+  }
+}
+registerProcessor("orbit-fx", OrbitFx);

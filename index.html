@@ -177,7 +177,8 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 .btn.icon.lockbtn[aria-pressed="true"]{color:var(--acc);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc);background:var(--panel)}
 .btn.more{font-size:1.2rem;line-height:1}
 .btn.dice{min-width:0;width:42px;padding:0;display:grid;place-items:center;flex:none}
-.vhead .oname{margin-left:auto;flex:none;width:30px;height:30px;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.9rem;border:2px solid var(--acc);color:var(--acc)}
+.panel{position:relative}
+.vhead .oname{position:absolute;top:9px;right:9px;flex:none;width:30px;height:30px;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.9rem;border:2px solid var(--acc);color:var(--acc)}
 .vhead .ow{display:none}
 @media (max-width:370px){ .vhead{column-gap:6px} .vhead .btn{min-width:0;padding-left:8px;padding-right:8px} .vhead .btn.dice{width:34px} .vhead .info{width:28px;height:28px} }
 .pages{display:flex;gap:6px;flex:1;min-width:0}
@@ -312,7 +313,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.38";
+const APP_VERSION="1.39";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -369,7 +370,9 @@ const FX = {
 const base = {prob:100, pull:20, mode:"random", decay:0.5, harm:0.4, timb:0.5, morph:0.5, mdecay:0.5, colour:0.5,
   pan:0, dSend:0.2, rSend:0.3, ftype:"lowpass", cutoff:1, res:0.1, fenv:0, fdec:0.3,
   envMode:"natural", A:0.01, D:0.3, S:0.6, R:0.4, gate:1, tails:"cut", swing:0,
-  midi:0, local:"on", vel:100};   // vel: velocity of each hit, 1-127 like MIDI (100 = normal loudness)   // midi: channel 1-16 this orbit sends notes on (0 = off); local: play its own sound
+  midi:0, local:"on", vel:100,
+  fx:"off", fxMix:0.5, fxA:0.5, fxB:0.5,                         // the orbit's own effect (Mix + MIDI tab)
+  arpChord:"triad", arpDir:"up", burst:1, burstRate:"medium", burstDir:"up"};   // arpeggio and burst (Pattern tab)   // vel: velocity of each hit, 1-127 like MIDI (100 = normal loudness)   // midi: channel 1-16 this orbit sends notes on (0 = off); local: play its own sound
 const newMod=()=>({src:"lfo", target:"off", shape:"sine", rate:0.35, depth:0.5, seed:Math.random()*100});
 const NMODS=4;   // modulators per orbit
 const newMods=()=>Array.from({length:NMODS},newMod);
@@ -431,7 +434,32 @@ function euclid(k,n,rot){
   const p=[]; for(let i=0;i<n;i++) p.push(((i*k)%n)<k);
   return p.map((_,i)=>p[(i+rot)%n]);
 }
+/* ---- arpeggios ----
+   A chord built from the scale: scale steps above the root (triad = 1st, 3rd, 5th of the scale, and so on),
+   repeated up through the orbit's Range. */
+const ARP_CHORDS={triad:[0,2,4],seventh:[0,2,4,6],sus:[0,3,4],scale:null};
+function chordDegrees(t){
+  const len=SCALES[G.scale].length, max=len*t.span, base=ARP_CHORDS[t.arpChord]||null, out=[];
+  for(let o=0;o*len<=max;o++){ (base||[...Array(len).keys()]).forEach(x=>{ const d=x+o*len; if(d<=max) out.push(d); }); }
+  return out;
+}
+function arpNext(t){
+  const L=chordDegrees(t), n=L.length; if(!n) return 0;
+  if(t.arpDir==="random") return L[Math.floor(Math.random()*n)];
+  if(t.arpDir==="updown"){ const cyc=Math.max(1,2*n-2); t.arpI=((t.arpI??-1)+1)%cyc; const i=t.arpI<n?t.arpI:cyc-t.arpI; return L[i]; }
+  t.arpI=((t.arpI??-1)+1)%n; return t.arpDir==="down"?L[n-1-t.arpI]:L[t.arpI];
+}
+// a burst: the hit's note, then the next chord notes above (or below) it, played quickly one after another
+function burstDegrees(t,d){
+  const len=SCALES[G.scale].length, base=ARP_CHORDS[t.arpChord]||[...Array(len).keys()], out=[d], ext=[];
+  for(let o=0;o<=t.span+2;o++) base.forEach(x=>ext.push(x+o*len));   // the chord, a few octaves up
+  ext.sort((a,b)=>a-b);
+  let i=ext.findIndex(x=>x>=d); if(i<0) i=ext.length-1;
+  for(let j=1;j<t.burst;j++){ const k=t.burstDir==="down"?i-j:i+j; out.push(ext[Math.max(0,Math.min(ext.length-1,k))]); }
+  return out;
+}
 function nextDegree(t){
+  if(t.mode==="arp"){ const d=arpNext(t); t.last=d; return d; }
   const len=SCALES[G.scale].length, max=len*t.span; let d;
   if(t.mode==="walk"){
     const moves=[-2,-1,-1,0,1,1,2]; d=t.last+moves[Math.floor(Math.random()*moves.length)];
@@ -519,7 +547,9 @@ function initAudio(){
     t.strip=ctx.createGain();
     t.panner=ctx.createStereoPanner();
     t.dSendG=ctx.createGain(); t.rSendG=ctx.createGain();
-    t.vca.connect(t.filter); t.filter.connect(t.strip); t.strip.connect(t.panner); t.panner.connect(master);
+    t.fxDry=ctx.createGain(); t.fxWet=ctx.createGain(); t.fxWet.gain.value=0;
+    t.vca.connect(t.filter); t.filter.connect(t.fxDry); t.fxDry.connect(t.strip); t.fxWet.connect(t.strip);
+    t.strip.connect(t.panner); t.panner.connect(master);
     t.panner.connect(t.dSendG); t.dSendG.connect(delayIn);
     t.panner.connect(t.rSendG); t.rSendG.connect(revIn);
     t.filter.frequency.value=cutoffHz(t.cutoff);
@@ -555,6 +585,7 @@ function applyParams(instant){
   const n=ctx.currentTime, tc=instant?0.001:0.03, set=(p,v)=>p.setTargetAtTime(v,n,tc);
   set(master.gain,G.master);
   tracks.forEach(t=>{
+    updateFx(t,n);
     set(t.strip.gain,t.vol); set(t.panner.pan,t.pan); set(t.dSendG.gain,t.dSend*0.7); set(t.rSendG.gain,t.rSend*0.8);
     t.filter.type=t.ftype; set(t.filter.Q,resQ(t.res));
     if(t.fenv===0) set(t.filter.frequency,cutoffHz(t.cutoff));
@@ -589,9 +620,11 @@ function modTargetOptions(t,current){
   return [["off","Off"],{group:"Note",items:[["vel","Velocity"]]},{group:"Voice",items:voice},
     {group:"Filter",items:[["cutoff","Cutoff"],["res","Resonance"],["fenv","Envelope amount"],["fdec","Envelope decay"]]},
     {group:"Amp envelope",items:[["A","Attack"],["D","Decay"],["S","Sustain"],["R","Release"]]},
-    {group:"Mix",items:[["pan","Pan"]]}];
+    {group:"Mix",items:[["pan","Pan"]]},
+    ...(t.fx!=="off"||["fxMix","fxA","fxB"].includes(current)?[{group:"Effect"+(t.fx!=="off"?": "+(FX_TYPES.find(([v])=>v===t.fx)||[0,""])[1]:""),
+      items:[["fxMix","Effect mix"],["fxA",(FX_KNOBS[t.fx]||["Effect control 1"])[0]],["fxB",(FX_KNOBS[t.fx]||[0,"Effect control 2"])[1]]]}]:[])];
 }
-const RANGES={vel:[1,127,0],pan:[-1,1,0],harm:[0,1,0],timb:[0,1,0],morph:[0,1,0],colour:[0,1,0],mdecay:[0,1,0],cutoff:[0,1,0],res:[0,1,0],fenv:[-1,1,0],fdec:[0.01,2,1],A:[0.001,4,1],D:[0.01,4,1],S:[0,1,0],R:[0.01,8,1]}; // [min,max,log]
+const RANGES={vel:[1,127,0],pan:[-1,1,0],fxMix:[0,1,0],fxA:[0,1,0],fxB:[0,1,0],harm:[0,1,0],timb:[0,1,0],morph:[0,1,0],colour:[0,1,0],mdecay:[0,1,0],cutoff:[0,1,0],res:[0,1,0],fenv:[-1,1,0],fdec:[0.01,2,1],A:[0.001,4,1],D:[0.01,4,1],S:[0,1,0],R:[0.01,8,1]}; // [min,max,log]
 const modHz=r=>0.02*Math.pow(400,r);
 const rnd=(n,seed)=>{const x=Math.sin(n*12.9898+seed*78.233)*43758.5453; return (x-Math.floor(x))*2-1;};
 function lfo(m,T){
@@ -640,11 +673,93 @@ let lastVoiceModSend=0;
 function voiceParams(t,T){ const adsr=t.envMode==="adsr";
   return {engine:+t.voice.slice(2), harmonics:eff(t,"harm",T), timbre:eff(t,"timb",T), morph:eff(t,"morph",T),
     decay:adsr?0.95:eff(t,"mdecay",T), colour:eff(t,"colour",T), hold:adsr}; }
+/* ================= per-orbit effects =================
+   One effect per orbit, between its filter and its volume. Mix sets how much of it you hear; the two
+   other controls depend on the effect. The effect's parts are only built while it's switched on. */
+const FX_TYPES=[["off","Off"],["tape","Tape"],["chorus","Chorus"],["resonator","Resonator"],["ring","Ring mod"],["lofi","Lo-fi"],["swell","Swell"],["freeze","Freeze"]];
+const FX_KNOBS={tape:["Wobble","Saturation"],chorus:["Depth","Speed"],resonator:["Ring time","Brightness"],ring:["Ratio","Tone"],
+  lofi:["Bits","Sample rate"],swell:["Fade-in","Echo"],freeze:["Grain size","Hold"]};
+const FX_HINTS={tape:"Gentle wow and flutter with soft saturation, like an old cassette.",
+  chorus:"Slow, wide shimmering doubling.",
+  resonator:"A tuned comb that rings at each note's pitch: metallic, singing tones.",
+  ring:"Multiplies the sound by a tone tuned to each note: bell-like and otherworldly.",
+  lofi:"Fewer bits and a lower sample rate, for dusty or crunchy textures.",
+  swell:"Each note fades in slowly, like a volume pedal or reversed tape. Echo adds soft repeats.",
+  freeze:"Smears the sound into a lingering cloud of grains. Hold keeps more of the past (at full, it freezes)."};
+function makeTanh(){ const n=1024, c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.tanh(2.5*x)/Math.tanh(2.5); } return c; }
+function teardownFx(t){ if(!t.fxNodes) return; t.fxNodes.all.forEach(nd=>{ try{ nd.disconnect(); }catch(e){} try{ nd.stop&&nd.stop(); }catch(e){} }); t.fxNodes=null; }
+function buildFx(t){
+  const c=ctx, F={type:t.fx, all:[]}, mk=nd=>{ F.all.push(nd); return nd; };
+  const inp=mk(c.createGain()), out=mk(c.createGain()); F.inp=inp; F.out=out;
+  if(t.fx==="tape"){
+    const d=mk(c.createDelay(0.1)); d.delayTime.value=0.012;
+    const wow=mk(c.createOscillator()); wow.frequency.value=0.7; const wg=mk(c.createGain());
+    const flt=mk(c.createOscillator()); flt.frequency.value=7.3; const fg=mk(c.createGain());
+    wow.connect(wg); wg.connect(d.delayTime); flt.connect(fg); fg.connect(d.delayTime); wow.start(); flt.start();
+    const pre=mk(c.createGain()), sh=mk(c.createWaveShaper()), post=mk(c.createGain()), lp=mk(c.createBiquadFilter());
+    sh.curve=makeTanh(); lp.type="lowpass"; lp.frequency.value=7500;
+    inp.connect(d); d.connect(pre); pre.connect(sh); sh.connect(post); post.connect(lp); lp.connect(out);
+    Object.assign(F,{wg,fg,pre,post});
+  } else if(t.fx==="chorus"){
+    const d1=mk(c.createDelay(0.1)), d2=mk(c.createDelay(0.1)); d1.delayTime.value=0.018; d2.delayTime.value=0.027;
+    const o=mk(c.createOscillator()); o.frequency.value=0.3; const g1=mk(c.createGain()), g2=mk(c.createGain());
+    o.connect(g1); g1.connect(d1.delayTime); o.connect(g2); g2.connect(d2.delayTime); o.start();
+    inp.connect(d1); inp.connect(d2); d1.connect(out); d2.connect(out); out.gain.value=0.7;
+    Object.assign(F,{o,g1,g2});
+  } else if(t.fx==="resonator"){
+    const sum=mk(c.createGain()), d=mk(c.createDelay(0.1)), lp=mk(c.createBiquadFilter()), fb=mk(c.createGain()), trim=mk(c.createGain());
+    lp.type="lowpass"; d.delayTime.value=1/220;
+    inp.connect(trim); trim.gain.value=0.35; trim.connect(sum); sum.connect(d); d.connect(lp); lp.connect(fb); fb.connect(sum); lp.connect(out);
+    Object.assign(F,{d,lp,fb});
+  } else if(t.fx==="ring"){
+    const g=mk(c.createGain()); g.gain.value=0; const o=mk(c.createOscillator()); o.frequency.value=220; o.connect(g.gain); o.start();
+    const lp=mk(c.createBiquadFilter()); lp.type="lowpass";
+    inp.connect(g); g.connect(lp); lp.connect(out);
+    Object.assign(F,{o,lp,ratioHz:220});
+  } else if(t.fx==="swell"){
+    const g=mk(c.createGain()); g.gain.value=1;
+    const d=mk(c.createDelay(1)), fb=mk(c.createGain()); d.delayTime.value=0.38;
+    inp.connect(g); g.connect(out); g.connect(d); d.connect(fb); fb.connect(d); d.connect(out);
+    Object.assign(F,{g,fb});
+  } else if(t.fx==="lofi"||t.fx==="freeze"){
+    if(macroState!=="ready") return null;   // these run in the audio thread, which loads with the sound engine
+    const w=mk(new AudioWorkletNode(c,"orbit-fx",{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],processorOptions:{type:t.fx}}));
+    inp.connect(w); w.connect(out); F.w=w; F.sent="";
+  }
+  t.filter.connect(inp); out.connect(t.fxWet);
+  return F;
+}
+// keep the effect's parts and settings in step with the orbit (called with every parameter update and by modulation)
+function updateFx(t,n){
+  if(!ctx) return;
+  if(t.fxNodes&&t.fxNodes.type!==t.fx) teardownFx(t);
+  if(t.fx!=="off"&&!t.fxNodes) t.fxNodes=buildFx(t);
+  const F=t.fxNodes, on=!!F, mix=on?eff(t,"fxMix",n):0, A=eff(t,"fxA",n), B=eff(t,"fxB",n), tc=0.05;
+  t.fxDry.gain.setTargetAtTime(t.fx==="swell"?1-mix:Math.cos(mix*Math.PI/2),n,tc);
+  t.fxWet.gain.setTargetAtTime(on?(t.fx==="swell"?mix:Math.sin(mix*Math.PI/2)):0,n,tc);
+  if(!on) return;
+  const set=(p,v)=>p.setTargetAtTime(v,n,tc);
+  if(t.fx==="tape"){ set(F.wg.gain,A*0.0035); set(F.fg.gain,A*0.00035); set(F.pre.gain,1+B*5); set(F.post.gain,1/(1+B*1.5)); }
+  else if(t.fx==="chorus"){ set(F.o.frequency,0.05*Math.pow(40,B)); set(F.g1.gain,A*0.006); set(F.g2.gain,-A*0.008); }
+  else if(t.fx==="resonator"){ set(F.fb.gain,0.5+A*0.47); set(F.lp.frequency,800*Math.pow(18,B)); }
+  else if(t.fx==="ring"){ F.ratio=0.25*Math.pow(16,A); set(F.lp.frequency,400*Math.pow(40,B)); }
+  else if(t.fx==="swell"){ F.fade=0.05+A*2.95; set(F.fb.gain,B*0.6); }
+  else if(F.w){ const msg=A.toFixed(3)+","+B.toFixed(3); if(msg!==F.sent){ F.sent=msg; F.w.port.postMessage({a:A,b:B}); } }
+}
+// effects that follow each note: tuned to its pitch, or fading it in
+function fxNote(t,time,midi){
+  const F=t.fxNodes; if(!F) return;
+  const hz=mtof(midi);
+  if(t.fx==="resonator"){ let f=hz; const maxF=ctx.sampleRate/140; while(f>maxF) f/=2; F.d.delayTime.setValueAtTime(1/f,time); }
+  else if(t.fx==="ring") F.o.frequency.setValueAtTime(Math.min(8000,hz*(F.ratio||1)),time);
+  else if(t.fx==="swell"){ const g=F.g.gain; g.cancelScheduledValues(time); g.setValueAtTime(0,time); g.linearRampToValueAtTime(1,time+(F.fade||1)); }
+}
 function applyContinuousMods(){
   const n=ctx.currentTime;
   tracks.forEach(t=>{
     if(modded(t,"res")) t.filter.Q.setTargetAtTime(resQ(eff(t,"res",n)),n,0.04);
     if(modded(t,"pan")) t.panner.pan.setTargetAtTime(eff(t,"pan",n),n,0.04);
+    if(t.fx!=="off"&&(modded(t,"fxMix")||modded(t,"fxA")||modded(t,"fxB"))) updateFx(t,n);
     if(modded(t,"cutoff") && t.fenv===0 && !modded(t,"fenv")) t.filter.frequency.setTargetAtTime(cutoffHz(eff(t,"cutoff",n)),n,0.04);
   });
   // voice controls are sent to the sound engine, so held and ringing notes keep moving between notes too
@@ -807,17 +922,22 @@ function schedule(){
         let d;
         if(t.lock && t.notes[pos]!=null) d=t.notes[pos]; else { d=nextDegree(t); t.notes[pos]=d; }
         if(ti<G.orbits && !t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
-          const m=degreeToMidi(t,d), gateDur=t.gate*stepDur; name=mname(m);
-          modNote(t,time,m);
-          const vel=Math.max(1,Math.min(127,Math.round(eff(t,"vel",time))));
-          if(t.midi) midiNote(t.midi,m,time,gateDur,vel);
-          if(t.local!=="off") triggerEnvelopes(t,time,gateDur);
-          if(macroState==="ready" && t.local!=="off"){
-            const v=ti+(t.tails==="ring"?(t.alt^=1)*8:0);
-            // gate and until (when an ADSR note's release has certainly finished) let the engine pick notes to cut if it runs short
-            const adsr=t.envMode==="adsr", until=adsr?Math.max(gateDur,eff(t,"A",time))+eff(t,"R",time)*1.6+0.05:0;
-            macroNode.port.postMessage({type:"trig",v,ring:ti,time,note:m+pitchComp,gate:gateDur,until,vel:Math.pow(vel/100,1.5),...voiceParams(t,time)});
-          }
+          // a burst plays several chord notes quickly within the hit; otherwise just the one note
+          const degs=t.burst>1?burstDegrees(t,d):[d], gap=stepDur*({fast:0.25,medium:1/3,slow:0.5}[t.burstRate]||1/3);
+          degs.forEach((dj,j)=>{
+            const nt=time+j*gap, m=degreeToMidi(t,dj), gateDur=degs.length>1?Math.min(t.gate*stepDur,Math.max(gap,t.gate*stepDur-j*gap)):t.gate*stepDur;
+            if(j===0) name=mname(m);
+            modNote(t,nt,m);
+            const vel=Math.max(1,Math.min(127,Math.round(eff(t,"vel",nt)*(j?Math.pow(0.92,j):1))));
+            if(t.midi) midiNote(t.midi,m,nt,gateDur,vel);
+            if(t.local!=="off"){ triggerEnvelopes(t,nt,gateDur); fxNote(t,nt,m); }
+            if(macroState==="ready" && t.local!=="off"){
+              const v=ti+(t.tails==="ring"?(t.alt^=1)*8:0);
+              // gate and until (when an ADSR note's release has certainly finished) let the engine pick notes to cut if it runs short
+              const adsr=t.envMode==="adsr", until=adsr?Math.max(gateDur,eff(t,"A",nt))+eff(t,"R",nt)*1.6+0.05:0;
+              macroNode.port.postMessage({type:"trig",v,ring:ti,time:nt,note:m+pitchComp,gate:gateDur,until,vel:Math.pow(vel/100,1.5),...voiceParams(t,nt)});
+            }
+          });
         }
       }
       visQ.push({ti,pos,time,name});
@@ -1065,7 +1185,7 @@ function pickTextFile(){
 const LIVE=[];   // on-screen controls that should follow values the blend changes
 const G_CONT={bpm:1, master:0};                                    // 1 = whole numbers
 const FX_CONT={dFree:0,dFb:0,dTone:0,dRet:0,rTime:0,rDamp:0,rPre:0,rLow:0,rRet:0};
-const T_CONT={vel:1,prob:0,pull:0,decay:0,harm:0,timb:0,morph:0,mdecay:0,colour:0,pan:0,dSend:0,rSend:0,cutoff:0,res:0,
+const T_CONT={fxMix:0,fxA:0,fxB:0,vel:1,prob:0,pull:0,decay:0,harm:0,timb:0,morph:0,mdecay:0,colour:0,pan:0,dSend:0,rSend:0,cutoff:0,res:0,
   fenv:0,fdec:0,A:0,D:0,S:0,R:0,gate:0,swing:0,vol:0,oct:1,span:1};
 const T_RHYTHM=["steps","hits","rot","notes","lock"];
 const BLEND={active:false, pos:0, from:null, to:null, fromName:"", toName:"", dur:0, running:false, side:{}, held:new Set(), last:0};
@@ -1087,7 +1207,7 @@ function applyBlend(){
   const cont=(obj,key,a,b,whole,path)=>{ if(H.has(path)||typeof a!=="number"||typeof b!=="number") return; let v=lerp(a,b,p); obj[key]=whole?Math.round(v):v; };
   const pick=(obj,key,a,b,point,path)=>{ if(H.has(path)) return; const side=p<point?0:1;
     if(BLEND.side[path]!==side){ BLEND.side[path]=side; const v=side?b:a; if(v!==undefined){ obj[key]=clone(v); changed=true; } } };
-  for(const k in G) (k in G_CONT)?cont(G,k,A.G[k],B.G[k],G_CONT[k],"G."+k):pick(G,k,A.G[k],B.G[k],0.5,"G."+k);
+  for(const k in G){ if(k==="orbits") continue; (k in G_CONT)?cont(G,k,A.G[k],B.G[k],G_CONT[k],"G."+k):pick(G,k,A.G[k],B.G[k],0.5,"G."+k); }
   for(const k in FX) (k in FX_CONT)?cont(FX,k,A.FX[k],B.FX[k],0,"FX."+k):pick(FX,k,A.FX[k],B.FX[k],0.5,"FX."+k);
   tracks.forEach((t,i)=>{
     const a=A.tracks[i]||{}, b=B.tracks[i]||{}, pt=orbitPoint(i);
@@ -1134,6 +1254,7 @@ function startBlend(fromSnap,toSnap,fromName,toName,dur){
   blendCheckpoint();   // Undo can always go back to just before the blend started
   Object.assign(BLEND,{active:true,pos:0,from:clone(fromSnap),to:clone(toSnap),fromName,toName,dur,running:dur>0,side:{},held:new Set(),last:performance.now()});
   BLEND.from.tracks=BLEND.from.tracks||[]; BLEND.to.tracks=BLEND.to.tracks||[];
+  if(usesUpperOrbits(BLEND.to)||usesUpperOrbits(BLEND.from)){ G.orbits=8; showOrbits(); }
   document.getElementById("blendbar").hidden=false;
   applyBlend();
 }
@@ -1147,19 +1268,26 @@ setInterval(()=>{   // drift moves the blend along, only while the music is play
   applyBlend();
   if(arrived) blendCheckpoint();   // arriving is a step Undo can go back to
 },150);
-function restore(snap){
+// Loading a session keeps your choice of 4 or 8 orbits, and only switches to 8 by itself when the session
+// actually uses orbits 5–8. Undo/Redo and "Apply now" put everything back exactly (exact=true).
+// (a session counts as using them only if it was saved with 8 orbits showing and has hits in orbits 5–8)
+const usesUpperOrbits=snap=>+((snap.G||{}).orbits)===8&&(snap.tracks||[]).slice(4).some(st=>st&&st.hits>0&&!st.mute);
+function restore(snap,exact){
   if(!snap||!snap.G||!Array.isArray(snap.tracks)) throw new Error("not a session");
   if(typeof BLEND!=="undefined"&&BLEND.active) endBlend();
+  const keepOrbits=G.orbits;
   Object.keys(G).forEach(k=>{if(k in snap.G) G[k]=snap.G[k];});
   const oldSwing=snap.G.swing;   // older sessions had one swing for every ring
   Object.keys(FX).forEach(k=>{if(k in snap.FX) FX[k]=snap.FX[k];});
-  if(!("orbits" in snap.G)) G.orbits=4;
-  G.orbits=+G.orbits===8?8:4;
+  if(exact) G.orbits=+snap.G.orbits===8?8:4;
+  else G.orbits=usesUpperOrbits(snap)?8:(+keepOrbits===8?8:4);
   tracks.forEach((t,i)=>{ const st=snap.tracks[i]||{...clone(ORBIT_DEFAULTS[i]),hits:0,mute:false,lock:false,notes:[]};   // orbits a session didn't have start empty: a sound is ready, but no hits 
     TKEYS.forEach(k=>{if(k in st) t[k]=clone(st[k]);});
     if(!Array.isArray(t.mods)) t.mods=[]; while(t.mods.length<NMODS) t.mods.push(newMod());
     if(!("swing" in st)) t.swing=oldSwing||0;
     if(!("vel" in st)) t.vel=100;   // sessions from before velocity
+    ["fx","fxMix","fxA","fxB","arpChord","arpDir","burst","burstRate","burstDir"].forEach(k=>{ if(!(k in st)) t[k]=base[k]; });   // sessions from before effects and arpeggios
+    t.arpI=-1;
     t.mods.forEach(m=>{ if(!m.src) m.src="lfo"; });
     if(!isMacro(t.voice)) t.voice="m:8";   // older sessions may use the removed simple synths
     t.last=0; t.nnEl.textContent="\u2013"; t.ringEl.classList.toggle("muted",!!t.mute);});
@@ -1262,7 +1390,9 @@ function rollRhythm(t){
   t.vel=RWI(80,110,40,127);   // velocity: around normal, wider as the setting gets wilder
 }
 function rollNotes(t){
-  t.mode=chance(0.6)?"walk":"random"; t.pull=RWI(10,70,0,100); t.oct=Math.max(1,Math.min(6,RWI(2,5,1,6)));
+  t.mode=chance(0.15+0.1*wild())?"arp":chance(0.6)?"walk":"random"; t.pull=RWI(10,70,0,100);
+  t.arpChord=pick(["triad","triad","seventh","sus","scale"]); t.arpDir=pick(["up","down","updown","random"]); t.arpI=-1;
+  t.burst=chance(0.12+0.15*wild())?RI(2,4+Math.round(2*wild())):1; t.burstRate=pick(["fast","medium","slow"]); t.burstDir=pick(["up","down"]); t.oct=Math.max(1,Math.min(6,RWI(2,5,1,6)));
   t.span=chance(0.7-0.3*wild())?1:RI(2,2+Math.round(wild())); t.notes=[];
 }
 function rollSound(t){
@@ -1296,7 +1426,7 @@ function percSound(t,role){
 }
 function percPattern(t,role){
   const w=wild();
-  Object.assign(t,{notes:[],mode:chance(0.5)?"walk":"random",swing:chance(0.5)?RI(5,25):0,prob:chance(0.6)?100:RWI(70,95,40,100),vel:RWI(90,115,60,127)});
+  Object.assign(t,{notes:[],burst:chance(0.15)?RI(2,3):1,burstRate:"fast",burstDir:"up",mode:chance(0.5)?"walk":"random",swing:chance(0.5)?RI(5,25):0,prob:chance(0.6)?100:RWI(70,95,40,100),vel:RWI(90,115,60,127)});
   if(role==="kick"){ t.oct=2; t.span=1; t.pull=90; t.steps=pick([8,12,16,16,16]); t.hits=RI(2,Math.max(2,Math.round(t.steps/4))); }
   else if(role==="snare"){ t.oct=3; t.span=1; t.pull=80; t.steps=pick([8,16,16,12]); t.hits=RI(1,Math.max(1,Math.round(t.steps/4))); }
   else if(role==="hats"){ t.oct=5; t.span=1; t.pull=50; t.steps=pick([8,12,16,16]); t.hits=RI(Math.round(t.steps*0.3),Math.round(t.steps*(0.7+0.3*w))); t.prob=RWI(65,100,30,100); }
@@ -1310,9 +1440,12 @@ function percMotion(t){
   t.mods[0]={...newMod(),src:"hit",target:"vel",depth:RW(0.15,0.35,0.05,0.7)};
   if(chance(0.5)) t.mods[1]={...newMod(),src:"hit",target:pick(["timb","morph","cutoff"]),depth:RW(0.1,0.3,0.05,0.6)};
 }
-function percMix(t,role){ t.pan=role==="kick"?0:RW(-0.3,0.3,-0.8,0.8); t.dSend=RW(0,0.25,0,0.6); t.rSend=RW(0.05,0.35,0,0.8); }
+function percMix(t,role){ t.pan=role==="kick"?0:RW(-0.3,0.3,-0.8,0.8); t.dSend=RW(0,0.25,0,0.6); t.rSend=RW(0.05,0.35,0,0.8);
+  if(role!=="kick"&&chance(0.3+0.3*wild())){ t.fx=pick(["lofi","tape","resonator","ring"]); t.fxMix=RW(0.2,0.5,0.1,1); t.fxA=RW(0.2,0.7,0,1); t.fxB=RW(0.2,0.7,0,1); } else t.fx="off"; }
 function rollPerc(t,role){ role=role||pick(["kick","snare","hats","perc"]); percSound(t,role); percPattern(t,role); percMotion(t); percMix(t,role); }
-function rollMix(t){ t.pan=RW(-0.6,0.6,-1,1); t.dSend=RW(0,0.6,0,1); t.rSend=RW(0.3,1,0,1); }
+function rollMix(t){ t.pan=RW(-0.6,0.6,-1,1); t.dSend=RW(0,0.6,0,1); t.rSend=RW(0.3,1,0,1);
+  if(chance(0.35+0.3*wild())){ t.fx=pick(["tape","chorus","resonator","ring","lofi","swell","freeze","tape","chorus"]); t.fxMix=RW(0.25,0.6,0.1,1); t.fxA=RW(0.2,0.7,0,1); t.fxB=RW(0.2,0.7,0,1); }
+  else t.fx="off"; }
 function nudge(t){
   const step=(k,lo,hi,amt)=>{ t[k]=Math.max(lo,Math.min(hi,t[k]+R(-amt,amt)*(hi-lo))); };
   ["harm","timb","morph","colour","mdecay"].forEach(k=>step(k,0,1,0.08));
@@ -1438,9 +1571,11 @@ const INFO={
     "Swing: delays every other step for a looser feel.",
     "New melody: picks fresh notes.",
     "Melody lock: keeps repeating the current notes.",
-    "Movement: Random can jump anywhere in the range; Walk moves a step or two at a time.",
+    "Movement: Random can jump anywhere in the range; Walk moves a step or two at a time; Arpeggio plays the notes of a chord one hit at a time.",
+    "Chord, Direction (Arpeggio): which chord from the scale (Triad, 7th, Sus or the whole Scale) and the order (Up, Down, Bounce up and down, or Random).",
     "Root pull: how often notes land on the root.",
-    "Octave, Range: where the notes sit and how far they spread."],
+    "Octave, Range: where the notes sit and how far they spread.",
+    "Notes per hit (Burst): each hit plays a quick run of chord notes, like a strum. Speed sets how quickly they follow each other; Direction goes up or down."],
   "Motion":[
     "Amp envelope: Natural lets each note fade by itself; ADSR shapes the volume.",
     "Attack, Decay, Sustain, Release: fade in, fall to the sustain level, hold, then fade out.",
@@ -1454,6 +1589,8 @@ const INFO={
   "Mix + MIDI":[
     "Delay send, Reverb send: how much goes to the shared delay and reverb (adjusted in Master).",
     "Pan: left or right.",
+    "Effect: one per orbit. Tape (wobble and warmth), Chorus (shimmer), Resonator (rings at each note's pitch), Ring mod (bell-like), Lo-fi (crunchy), Swell (notes fade in) or Freeze (a smeared cloud).",
+    "Mix: how much of the effect you hear. The two controls below it depend on the effect, and all three can be modulated.",
     "Channel: sends this orbit's notes to the MIDI output chosen in Global.",
     "Internal sound: turn off to hear only the MIDI instrument.",
     "Mute silences both the sound and the MIDI notes."],
@@ -1476,7 +1613,7 @@ const INFO={
     "Padlock (beside Root and Scale): keeps that setting when you use the dice.",
     "Tempo: speed for every orbit.",
     "Root, Scale: which notes every orbit can play.",
-    "Orbits: one row of 4, or two rows of 8. Orbits 5–8 are saved with the session.",
+    "Orbits: one row of 4, or two rows of 8. Loading a session keeps your choice, unless the session uses orbits 5–8, which switches to 8 so you hear them.",
     "Sound engine load: how much of the phone's time the voices take. If it gets too busy, a fading or old note is shortened to keep the sound smooth.",
     "Buffer: Steady glitches least when the phone is busy (for example in the background); Fast responds quickest to touches; Balanced is in between.",
     "Quality: Best is 48 kHz. Lighter (32 kHz) and Lightest (24 kHz) do less work, with a little less high treble.",
@@ -1597,10 +1734,16 @@ function renderVoice(t){
       slider(t,"vel","Velocity",1,127,1,v=>v),
       slider(t,"swing","Swing",0,60,1,v=>v+"%"),
       sect("Notes"),btns,
-      seg(t,"mode","Movement",[["random","Random"],["walk","Walk"]]),
-      slider(t,"pull","Root pull",0,100,1,v=>v+"%"),
+      full(seg(t,"mode","Movement",[["random","Random"],["walk","Walk"],["arp","Arpeggio"]],()=>{ t.arpI=-1; rerender(); })),
+      ...(t.mode==="arp"?[full(seg(t,"arpChord","Chord",[["triad","Triad"],["seventh","7th"],["sus","Sus"],["scale","Scale"]],()=>{t.arpI=-1;})),
+        full(seg(t,"arpDir","Direction",[["up","Up"],["down","Down"],["updown","Bounce"],["random","Random"]],()=>{t.arpI=-1;}))]:[]),
+      t.mode==="arp"?null:slider(t,"pull","Root pull",0,100,1,v=>v+"%"),
       slider(t,"oct","Octave",1,6,1,v=>"oct "+v),
-      slider(t,"span","Range",1,3,1,v=>v+(v>1?" octaves":" octave"),()=>{t.notes=[];}));
+      slider(t,"span","Range",1,3,1,v=>v+(v>1?" octaves":" octave"),()=>{t.notes=[];}),
+      sect("Burst"),
+      full(slider(t,"burst","Notes per hit",1,6,1,v=>v===1?"Off":v+" notes",rerender)),
+      ...(t.burst>1?[full(seg(t,"burstRate","Speed",[["fast","Fast"],["medium","Medium"],["slow","Slow"]])),
+        full(seg(t,"burstDir","Direction",[["up","Up"],["down","Down"]]))]:[]));
   } else if(voicePage==="Sound"){
     const vs=document.createElement("div"); vs.className="ctl full";
     vs.innerHTML=`<select id="voicesel" aria-label="Voice type">${MACRO.map(([i,n])=>`<option value="m:${i}">${n}</option>`).join("")}</select>`;
@@ -1653,6 +1796,12 @@ function renderVoice(t){
   } else {
     page=pageGrid(sect("Sends"),slider(t,"dSend","Delay send",0,1,0.01,pct), slider(t,"rSend","Reverb send",0,1,0.01,pct),
       full(slider(t,"pan","Pan",-1,1,0.01,v=>v===0?"Centre":(v<0?"L ":"R ")+Math.round(Math.abs(v)*100))),
+      sect("Effect"),
+      full(choice(t,"fx","Type",FX_TYPES,rerender)),
+      ...(t.fx==="off"?[]:[hint(FX_HINTS[t.fx]),
+        slider(t,"fxMix","Mix",0,1,0.01,pct),
+        slider(t,"fxA",FX_KNOBS[t.fx][0],0,1,0.01,v=>t.fx==="ring"?(0.25*Math.pow(16,v)).toFixed(2)+"\u00d7":t.fx==="swell"?(0.05+v*2.95).toFixed(2)+" s":pct(v)),
+        slider(t,"fxB",FX_KNOBS[t.fx][1],0,1,0.01,pct)]),
       sect("MIDI"),
       choice(t,"midi","Channel",[[0,"Off"],...Array.from({length:16},(_,i)=>[i+1,"Channel "+(i+1)])],()=>{ midiAllOff(); rerender(); }),
       seg(t,"local","Internal sound",[["on","On"],["off","Off"]]),
@@ -1973,7 +2122,7 @@ const PRESETS=[
 restore(DEFAULT_SESSION);
 // coming back from "Apply now" in Master > Engine: pick up exactly where things were
 try{ const resume=sessionStorage.getItem("default-ambience-resume");
-  if(resume){ sessionStorage.removeItem("default-ambience-resume"); const r=JSON.parse(resume); restore(r.snap); if(r.sel!=null) selectTab(r.sel); } }catch(e){}
+  if(resume){ sessionStorage.removeItem("default-ambience-resume"); const r=JSON.parse(resume); restore(r.snap,true); if(r.sel!=null) selectTab(r.sel); } }catch(e){}
 /* ================= one Undo / Redo for everything =================
    After any change settles, the whole setup is remembered (up to 100 steps). Undo and Redo move through
    those steps. Melodies that aren't locked keep playing as they are (they change all the time while
@@ -1998,7 +2147,7 @@ function goHistory(d){
   clearTimeout(HIST.timer); checkpoint();   // keep a change that hasn't been remembered yet
   const j=HIST.i+d; if(j<0||j>=HIST.list.length) return;
   HIST.i=j; HIST.applying=true;
-  try{ const keep=sel; restore(JSON.parse(HIST.list[j])); selectTab(typeof keep==="number"&&keep>=G.orbits?0:keep); }
+  try{ const keep=sel; restore(JSON.parse(HIST.list[j]),true); selectTab(typeof keep==="number"&&keep>=G.orbits?0:keep); }
   finally{ HIST.applying=false; }
   updateUndoButtons(); toast(d<0?"Undone":"Redone");
 }
