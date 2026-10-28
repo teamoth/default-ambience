@@ -4,6 +4,9 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -24,6 +27,47 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "Background")
 public class BackgroundPlugin extends Plugin {
     private static BackgroundPlugin instance;
+    // Audio focus: Android's way of letting one app play at a time. Starting Default Ambience asks for it
+    // (so music apps pause); when another app starts playing, Default Ambience is told and stops in turn.
+    private AudioManager audio;
+    private AudioFocusRequest focusRequest;
+    private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
+        String what = null;
+        if (change == AudioManager.AUDIOFOCUS_LOSS) what = "loss";                       // another app is playing now
+        else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) what = "pause";       // e.g. a phone call: pause, then carry on
+        else if (change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK) what = "duck"; // e.g. a navigation prompt: play quieter
+        else if (change == AudioManager.AUDIOFOCUS_GAIN) what = "resume";
+        if (what != null) callPage("window.daAudioFocus&&window.daAudioFocus('" + what + "')");
+    };
+
+    private void requestFocus() {
+        audio = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        if (audio == null) return;
+        if (Build.VERSION.SDK_INT >= 26) {
+            focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+                    .setOnAudioFocusChangeListener(focusListener)
+                    .build();
+            audio.requestAudioFocus(focusRequest);
+        } else {
+            audio.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        }
+    }
+
+    private void abandonFocus() {
+        if (audio == null) return;
+        if (Build.VERSION.SDK_INT >= 26 && focusRequest != null) audio.abandonAudioFocusRequest(focusRequest);
+        else audio.abandonAudioFocus(focusListener);
+    }
+
+    private void callPage(String js) {
+        if (getBridge() == null) return;
+        final WebView wv = getBridge().getWebView();
+        if (wv == null) return;
+        wv.post(() -> wv.evaluateJavascript(js, null));
+    }
 
     @Override
     public void load() { instance = this; }
@@ -37,6 +81,7 @@ public class BackgroundPlugin extends Plugin {
         }
         try {
             ContextCompat.startForegroundService(getContext(), new Intent(getContext(), PlaybackService.class));
+            requestFocus();
             call.resolve();
         } catch (Exception e) {
             call.reject("Background playback couldn't start: " + e.getMessage());
@@ -46,6 +91,7 @@ public class BackgroundPlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         getContext().stopService(new Intent(getContext(), PlaybackService.class));
+        abandonFocus();
         call.resolve();
     }
 

@@ -183,54 +183,66 @@ class TextureReverb extends AudioWorkletProcessor {
 }
 registerProcessor("texture-reverb", TextureReverb);
 
-// Per-orbit effects that need sample-by-sample processing: Lo-fi and Freeze.
-// Lo-fi: fewer bits and a lower sample rate (a = bits, b = rate).
-// Freeze: records into a 4-second loop and plays it back as overlapping soft grains, so the sound smears
-// into a cloud; Hold blends new sound into the loop more slowly (at full Hold it stops recording and stays frozen).
-class OrbitFx extends AudioWorkletProcessor {
-  constructor(options) {
+// A looper orbit: records sound into a loop, then plays it round and round.
+// Free length: a recording lasts as long as you record (up to 60 seconds).
+// Messages: {cmd:"record"} start a new recording; {cmd:"stop"} finish it (the loop then plays);
+// {cmd:"overdub", on} layer new sound over the loop as it plays; {cmd:"clear"}; {cmd:"load", data} use a sound file;
+// {cmd:"get"} send back a copy of the loop (for saving); {cmd:"run", on} follow the app's Play/Stop;
+// {cmd:"set", reverse, speed, fade, start, length} playback settings.
+class Looper extends AudioWorkletProcessor {
+  constructor() {
     super();
-    this.type = (options.processorOptions && options.processorOptions.type) || "lofi";
-    this.a = 0.5; this.b = 0.5;
-    this.port.onmessage = (ev) => { const d = ev.data; if (d.a != null) this.a = d.a; if (d.b != null) this.b = d.b; };
-    this.hold = 0; this.count = 0;
-    this.len = Math.floor(sampleRate * 4); this.buf = new Float32Array(this.len); this.w = 0;
-    this.grains = []; for (let i = 0; i < 4; i++) this.grains.push({ pos: 0, age: 1, len: 1 });
+    this.max = Math.floor(sampleRate * 60);
+    this.buf = new Float32Array(this.max);
+    this.len = 0; this.pos = 0; this.mode = "idle"; this.running = false;
+    this.reverse = false; this.speed = 1; this.fade = 0; this.start = 0; this.length = 1;
+    this.lastReport = 0;
+    this.port.onmessage = (ev) => {
+      const d = ev.data;
+      if (d.cmd === "record") { this.len = 0; this.pos = 0; this.mode = "record"; }
+      else if (d.cmd === "stop") { if (this.mode === "record") { this.mode = "idle"; this.pos = 0; } else this.mode = "idle"; this.report(true); }
+      else if (d.cmd === "overdub") { if (this.len > 0) this.mode = d.on ? "overdub" : "idle"; }
+      else if (d.cmd === "clear") { this.len = 0; this.pos = 0; this.mode = "idle"; this.buf.fill(0); this.report(true); }
+      else if (d.cmd === "load") { const src = d.data; this.len = Math.min(this.max, src.length); this.buf.set(src.subarray(0, this.len)); this.buf.fill(0, this.len); this.pos = 0; this.mode = "idle"; this.report(true); }
+      else if (d.cmd === "get") { const copy = this.buf.slice(0, this.len); this.port.postMessage({ type: "data", id: d.id, data: copy }, [copy.buffer]); }
+      else if (d.cmd === "run") { this.running = !!d.on; }
+      else if (d.cmd === "set") { for (const k of ["reverse", "speed", "fade", "start", "length"]) if (d[k] != null) this[k] = d[k]; }
+    };
+  }
+  report(force) {
+    if (!force && currentTime - this.lastReport < 0.05) return;
+    this.lastReport = currentTime;
+    this.port.postMessage({ type: "pos", mode: this.mode, len: this.len / sampleRate, pos: this.len ? this.pos / this.len : 0 });
   }
   process(inputs, outputs) {
     const inp = inputs[0] && inputs[0][0], out = outputs[0][0];
     if (!out) return true;
-    const n = out.length;
-    if (this.type === "lofi") {
-      const bits = 16 - this.a * 13, q = Math.pow(2, bits - 1), step = 1 + Math.floor(this.b * 31);
-      for (let i = 0; i < n; i++) {
-        if (this.count <= 0) { this.hold = inp ? Math.round(inp[i] * q) / q : 0; this.count = step; }
-        this.count--; out[i] = this.hold;
-      }
-      return true;
+    const n = out.length, buf = this.buf;
+    if (this.mode === "record") {   // first take: write the input, stay silent (avoids feedback through speakers)
+      for (let i = 0; i < n; i++) { if (this.len < this.max) buf[this.len++] = inp ? inp[i] : 0; out[i] = 0; }
+      if (this.len >= this.max) { this.mode = "idle"; this.pos = 0; }
+      this.report(); return true;
     }
-    // freeze
-    const buf = this.buf, len = this.len, keep = Math.min(1, this.b * 1.02), gl = Math.floor(sampleRate * (0.06 + this.a * 0.9));
+    if (!this.len || !this.running) { out.fill(0); this.report(); return true; }
+    // the playing window: Start and Length pick part of the recording
+    const s0 = Math.floor(this.start * this.len), wl = Math.max(Math.floor(sampleRate * 0.05), Math.floor(this.length * (this.len - s0)));
+    const s1 = Math.min(this.len, s0 + wl), span = Math.max(1, s1 - s0);
+    const step = this.speed * (this.reverse ? -1 : 1);
+    // fade: the loop loses this fraction of its level each time round
+    const keep = Math.pow(1 - this.fade, 1 / span);
+    if (this.pos < s0 || this.pos >= s1) this.pos = this.reverse ? s1 - 1 : s0;
     for (let i = 0; i < n; i++) {
-      const x = inp ? inp[i] : 0;
-      if (keep < 1) buf[this.w] = buf[this.w] * keep + x * (1 - keep);
-      this.w = (this.w + 1) % len;
-      let y = 0;
-      for (let g = 0; g < 4; g++) {
-        const gr = this.grains[g];
-        if (gr.age >= gr.len) {   // start a new grain somewhere in the recent past
-          gr.len = gl; gr.age = -Math.floor(Math.random() * gl * 0.5) - g * (gl >> 2);
-          gr.pos = (this.w - gl - Math.floor(Math.random() * (len - 2 * gl)) + len * 2) % len;
-        }
-        if (gr.age >= 0) {
-          const ph = gr.age / gr.len, win = 0.5 - 0.5 * Math.cos(2 * Math.PI * ph);
-          y += buf[(gr.pos + gr.age) % len] * win;
-        }
-        gr.age++;
-      }
-      out[i] = y * 0.6;
+      const p = this.pos, i0 = Math.floor(p), fr = p - i0, i1 = i0 + 1 < s1 ? i0 + 1 : s0;
+      const y = buf[i0] + (buf[i1] - buf[i0]) * fr;
+      out[i] = y;
+      if (this.mode === "overdub" && inp) buf[i0] = buf[i0] * keep + inp[i];
+      else if (this.fade > 0) buf[i0] *= keep;
+      let q = p + step;
+      if (q >= s1) q -= span; else if (q < s0) q += span;
+      this.pos = q;
     }
+    this.report();
     return true;
   }
 }
-registerProcessor("orbit-fx", OrbitFx);
+registerProcessor("looper", Looper);
