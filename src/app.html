@@ -188,6 +188,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 @media (max-width:370px){ .pages{gap:4px} .pages button{font-size:.76rem;padding-left:4px;padding-right:4px} }
 .page{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 22px;min-width:0}
 .page .full{grid-column:1 / -1}
+.page [hidden]{display:none!important}
 .hint{color:var(--muted);font-size:.8rem;line-height:1.45;margin:0;max-width:60ch}
 .subhead{font-size:var(--fs-ui);font-weight:600;color:var(--fg);margin:0}
 .meterrow{display:flex;align-items:center;gap:10px;min-height:22px}
@@ -291,7 +292,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.39";
+const APP_VERSION="1.40";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -985,6 +986,7 @@ function slider(obj,key,label,min,max,step,fmt,onchange){
       if(Math.abs(dx)>8){st.mode="drag"; st.x=e.clientX; sl.setPointerCapture(e.pointerId); sl.classList.add("dragging");}
       return;
     }
+    if(!st.w||!sl.isConnected){ st=null; return; }   // the slider has gone from the page: stop, rather than jump
     e.preventDefault(); setV(st.v+(e.clientX-st.x)/st.w*(max-min));
   });
   const end=()=>{st=null; sl.classList.remove("dragging");};
@@ -1708,6 +1710,9 @@ function renderVoice(t){
     const stepsS=slider(t,"steps","Steps",2,32,1,v=>v,()=>{hitsS.setMax(t.steps); rotS.setMax(t.steps-1); t.notes=[];});
     hitsS=slider(t,"hits","Hits",0,t.steps,1,v=>v);
     rotS=slider(t,"rot","Rotate",0,t.steps-1,1,v=>v);
+    const burstSpeed=full(seg(t,"burstRate","Speed",[["fast","Fast"],["medium","Medium"],["slow","Slow"]])),
+          burstDir=full(seg(t,"burstDir","Direction",[["up","Up"],["down","Down"]]));
+    burstSpeed.hidden=burstDir.hidden=t.burst<=1;
     page=pageGrid(sect("Rhythm"),rotS,hitsS,stepsS,slider(t,"prob","Chance",0,100,1,v=>v+"%"),
       slider(t,"vel","Velocity",1,127,1,v=>v),
       slider(t,"swing","Swing",0,60,1,v=>v+"%"),
@@ -1719,9 +1724,9 @@ function renderVoice(t){
       slider(t,"oct","Octave",1,6,1,v=>"oct "+v),
       slider(t,"span","Range",1,3,1,v=>v+(v>1?" octaves":" octave"),()=>{t.notes=[];}),
       sect("Burst"),
-      full(slider(t,"burst","Notes per hit",1,6,1,v=>v===1?"Off":v+" notes",rerender)),
-      ...(t.burst>1?[full(seg(t,"burstRate","Speed",[["fast","Fast"],["medium","Medium"],["slow","Slow"]])),
-        full(seg(t,"burstDir","Direction",[["up","Up"],["down","Down"]]))]:[]));
+      // Speed and Direction show or hide as Notes per hit moves, without rebuilding the page mid-drag
+      full(slider(t,"burst","Notes per hit",1,6,1,v=>v===1?"Off":v+" notes",()=>{ [burstSpeed,burstDir].forEach(el=>el.hidden=t.burst<=1); })),
+      burstSpeed, burstDir);
   } else if(voicePage==="Sound"){
     const vs=document.createElement("div"); vs.className="ctl full";
     vs.innerHTML=`<select id="voicesel" aria-label="Voice type">${MACRO.map(([i,n])=>`<option value="m:${i}">${n}</option>`).join("")}</select>`;
