@@ -1,5 +1,5 @@
 // Caches the app so it opens and plays offline. Bump VERSION when files change.
-const VERSION = "default-ambience-v47";
+const VERSION = "default-ambience-v48";
 const FILES = ["./", "index.html", "macro.wasm", "macro-worklet.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png"];
 self.addEventListener("install", (e) => {

@@ -314,7 +314,7 @@ textarea:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 <script>window.DA_SITE=true;</script>
 <script>
 /* ================= data ================= */
-const APP_VERSION="1.40";
+const APP_VERSION="1.41";
 var cssCache={}, cssGen=0;
 function css(n){ if(!(n in cssCache)) cssCache[n]=getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return cssCache[n]; }
 function refreshColours(){ cssCache={}; cssGen++; }
@@ -452,11 +452,15 @@ function arpNext(t){
 }
 // a burst: the hit's note, then the next chord notes above (or below) it, played quickly one after another
 function burstDegrees(t,d){
-  const len=SCALES[G.scale].length, base=ARP_CHORDS[t.arpChord]||[...Array(len).keys()], out=[d], ext=[];
+  const len=SCALES[G.scale].length, base=ARP_CHORDS[t.arpChord]||[...Array(len).keys()], out=[d], ext=[], L=chordDegrees(t);
   for(let o=0;o<=t.span+2;o++) base.forEach(x=>ext.push(x+o*len));   // the chord, a few octaves up
   ext.sort((a,b)=>a-b);
   let i=ext.findIndex(x=>x>=d); if(i<0) i=ext.length-1;
-  for(let j=1;j<t.burst;j++){ const k=t.burstDir==="down"?i-j:i+j; out.push(ext[Math.max(0,Math.min(ext.length-1,k))]); }
+  // follows the arpeggio's Direction: Up and Bounce strum upwards, Down downwards, Random picks chord notes at random
+  if(t.arpDir==="down"&&i<t.burst-1){ i=Math.min(ext.length-1,t.burst-1); out[0]=ext[i]; }   // start high enough to strum all the way down
+  for(let j=1;j<t.burst;j++){
+    if(t.arpDir==="random"){ out.push(ext[Math.floor(Math.random()*Math.min(ext.length,L.length+2))]); continue; }
+    const k=t.arpDir==="down"?i-j:i+j; out.push(ext[Math.max(0,Math.min(ext.length-1,k))]); }
   return out;
 }
 function nextDegree(t){
@@ -924,7 +928,7 @@ function schedule(){
         if(t.lock && t.notes[pos]!=null) d=t.notes[pos]; else { d=nextDegree(t); t.notes[pos]=d; }
         if(ti<G.orbits && !t.mute && (soloIdx<0||soloIdx===ti) && Math.random()*100<t.prob){
           // a burst plays several chord notes quickly within the hit; otherwise just the one note
-          const degs=t.burst>1?burstDegrees(t,d):[d], gap=stepDur*({fast:0.25,medium:1/3,slow:0.5}[t.burstRate]||1/3);
+          const degs=t.mode==="arp"&&t.burst>1?burstDegrees(t,d):[d], gap=stepDur*({fast:0.25,medium:1/3,slow:0.5}[t.burstRate]||1/3);
           degs.forEach((dj,j)=>{
             const nt=time+j*gap, m=degreeToMidi(t,dj), gateDur=degs.length>1?Math.min(t.gate*stepDur,Math.max(gap,t.gate*stepDur-j*gap)):t.gate*stepDur;
             if(j===0) name=mname(m);
@@ -1394,7 +1398,7 @@ function rollRhythm(t){
 function rollNotes(t){
   t.mode=chance(0.15+0.1*wild())?"arp":chance(0.6)?"walk":"random"; t.pull=RWI(10,70,0,100);
   t.arpChord=pick(["triad","triad","seventh","sus","scale"]); t.arpDir=pick(["up","down","updown","random"]); t.arpI=-1;
-  t.burst=chance(0.12+0.15*wild())?RI(2,4+Math.round(2*wild())):1; t.burstRate=pick(["fast","medium","slow"]); t.burstDir=pick(["up","down"]); t.oct=Math.max(1,Math.min(6,RWI(2,5,1,6)));
+  t.burst=t.mode==="arp"&&chance(0.3+0.2*wild())?RI(2,4+Math.round(2*wild())):1; t.burstRate=pick(["fast","medium","slow"]); t.oct=Math.max(1,Math.min(6,RWI(2,5,1,6)));
   t.span=chance(0.7-0.3*wild())?1:RI(2,2+Math.round(wild())); t.notes=[];
 }
 function rollSound(t){
@@ -1428,7 +1432,7 @@ function percSound(t,role){
 }
 function percPattern(t,role){
   const w=wild();
-  Object.assign(t,{notes:[],burst:chance(0.15)?RI(2,3):1,burstRate:"fast",burstDir:"up",mode:chance(0.5)?"walk":"random",swing:chance(0.5)?RI(5,25):0,prob:chance(0.6)?100:RWI(70,95,40,100),vel:RWI(90,115,60,127)});
+  Object.assign(t,{notes:[],burst:1,mode:chance(0.5)?"walk":"random",swing:chance(0.5)?RI(5,25):0,prob:chance(0.6)?100:RWI(70,95,40,100),vel:RWI(90,115,60,127)});
   if(role==="kick"){ t.oct=2; t.span=1; t.pull=90; t.steps=pick([8,12,16,16,16]); t.hits=RI(2,Math.max(2,Math.round(t.steps/4))); }
   else if(role==="snare"){ t.oct=3; t.span=1; t.pull=80; t.steps=pick([8,16,16,12]); t.hits=RI(1,Math.max(1,Math.round(t.steps/4))); }
   else if(role==="hats"){ t.oct=5; t.span=1; t.pull=50; t.steps=pick([8,12,16,16]); t.hits=RI(Math.round(t.steps*0.3),Math.round(t.steps*(0.7+0.3*w))); t.prob=RWI(65,100,30,100); }
@@ -1571,13 +1575,12 @@ const INFO={
     "Chance: how often a hit actually plays.",
     "Velocity: how hard each hit plays, 1–127 as in MIDI (100 is normal). Also sent with MIDI notes.",
     "Swing: delays every other step for a looser feel.",
-    "New melody: picks fresh notes.",
-    "Melody lock: keeps repeating the current notes.",
-    "Movement: Random can jump anywhere in the range; Walk moves a step or two at a time; Arpeggio plays the notes of a chord one hit at a time.",
+    "Movement: Scatter can jump anywhere in the range; Step moves to a neighbouring note, so lines flow smoothly; Arpeggio plays the notes of a chord.",
+    "Root pull (Scatter, Step): how often notes land on the root.",
     "Chord, Direction (Arpeggio): which chord from the scale (Triad, 7th, Sus or the whole Scale) and the order (Up, Down, Bounce up and down, or Random).",
-    "Root pull: how often notes land on the root.",
+    "Notes per hit (Arpeggio): 1 plays one chord note per hit; 2–6 strums through the chord on each hit, at the chosen Speed.",
     "Octave, Range: where the notes sit and how far they spread.",
-    "Notes per hit (Burst): each hit plays a quick run of chord notes, like a strum. Speed sets how quickly they follow each other; Direction goes up or down."],
+    "Repeat: Always new picks fresh notes every time round; Repeat a melody keeps the notes the orbit just played and loops them. New melody rolls a fresh one to repeat."],
   "Motion":[
     "Amp envelope: Natural lets each note fade by itself; ADSR shapes the volume.",
     "Attack, Decay, Sustain, Release: fade in, fall to the sustain level, hold, then fade out.",
@@ -1643,7 +1646,7 @@ const MAIN_INFO=[
   "Each of the circular 'orbits' is a looping rhythm. There are 4 to start with; Global can switch to 8, in two rows. The dots around it are its steps; the coloured dots are the hits, where a note plays, and the larger outlined dot shows where it is now. The number in the middle is hits/steps, and the note below is the last note played.",
   "Orbits of different lengths drift in and out of line with each other, so the music keeps changing.",
   "Undo and Redo at the top take back or redo any change, up to 100 steps.",
-  "Touch an orbit to open all of its settings underneath, in four tabs: Sound (voice and filter), Pattern (rhythm and notes), Motion (envelope and modulation) and Mix + MIDI (sends, pan and MIDI channel).",
+  "Touch an orbit to open all of its settings underneath, in four tabs: Sound (voice and filter), Pattern (rhythm and melody), Motion (envelope and modulation) and Mix + MIDI (sends, pan and MIDI channel).",
   "At the top of each orbit's panel: Mute, Solo, the dice (randomise, in an ambient or percussive style) and ⋯ (copy, paste, swap with another orbit, or reset). Pressing and holding an orbit opens the same ⋯ menu. Copied settings survive loading another session.",
   "Buttons below the orbits: Play starts and stops everything. Global has the tempo, key and scale, the number of orbits (4 or 8), the audio engine settings, MIDI and the colour theme, plus a dice that randomises everything. Master has the overall volume and the shared delay and reverb. Session has the presets and your saved sessions, codes to share and back up, and Blend, which moves from one session to another.",
   "The [i] button on each page explains its controls.",
@@ -1721,34 +1724,35 @@ function renderVoice(t){
   let page;
   const sect=txt=>{const d=document.createElement("div"); d.className="secthead full"; d.textContent=txt; return d;};
   if(voicePage==="Pattern"){
-    const btns=document.createElement("div"); btns.className="ctl";
-    const tiles=document.createElement("div"); tiles.className="tiles"; btns.append(tiles);
-    const reroll=mk("New melody","Pick a fresh set of notes"), lock=mk("Melody lock","Repeat the current notes instead of picking new ones");
-    lock.setAttribute("aria-pressed",t.lock);
-    lock.onclick=()=>{blendHold(t,"lock"); t.lock=!t.lock; lock.setAttribute("aria-pressed",t.lock);};
-    reroll.onclick=()=>{t.notes=[];};
-    tiles.append(reroll,lock);
     let hitsS,rotS;
     const stepsS=slider(t,"steps","Steps",2,32,1,v=>v,()=>{hitsS.setMax(t.steps); rotS.setMax(t.steps-1); t.notes=[];});
     hitsS=slider(t,"hits","Hits",0,t.steps,1,v=>v);
     rotS=slider(t,"rot","Rotate",0,t.steps-1,1,v=>v);
-    const burstSpeed=full(seg(t,"burstRate","Speed",[["fast","Fast"],["medium","Medium"],["slow","Slow"]])),
-          burstDir=full(seg(t,"burstDir","Direction",[["up","Up"],["down","Down"]]));
-    burstSpeed.hidden=burstDir.hidden=t.burst<=1;
+    // Arpeggio: Speed only matters when each hit plays more than one chord note (shown or hidden in place, never mid-drag rebuilds)
+    const arpSpeed=full(seg(t,"burstRate","Speed",[["fast","Fast"],["medium","Medium"],["slow","Slow"]]));
+    arpSpeed.hidden=t.burst<=1;
+    // Repeat: "New melody" only appears when a melody is being repeated
+    const newMel=mk("New melody","Roll a fresh melody to repeat"); newMel.onclick=()=>{ t.notes=[]; t.arpI=-1; };
+    const nmWrap=document.createElement("div"); nmWrap.className="ctl full"; nmWrap.append(newMel); newMel.style.alignSelf="flex-start";
+    nmWrap.hidden=!t.lock;
+    const repeat={get v(){ return t.lock?"repeat":"new"; }, set v(x){ t.lock=x==="repeat"; }};
     page=pageGrid(sect("Rhythm"),rotS,hitsS,stepsS,slider(t,"prob","Chance",0,100,1,v=>v+"%"),
       slider(t,"vel","Velocity",1,127,1,v=>v),
       slider(t,"swing","Swing",0,60,1,v=>v+"%"),
-      sect("Notes"),btns,
-      full(seg(t,"mode","Movement",[["random","Random"],["walk","Walk"],["arp","Arpeggio"]],()=>{ t.arpI=-1; rerender(); })),
-      ...(t.mode==="arp"?[full(seg(t,"arpChord","Chord",[["triad","Triad"],["seventh","7th"],["sus","Sus"],["scale","Scale"]],()=>{t.arpI=-1;})),
-        full(seg(t,"arpDir","Direction",[["up","Up"],["down","Down"],["updown","Bounce"],["random","Random"]],()=>{t.arpI=-1;}))]:[]),
-      t.mode==="arp"?null:slider(t,"pull","Root pull",0,100,1,v=>v+"%"),
+      sect("Melody"),
+      full(seg(t,"mode","Movement",[["random","Scatter"],["walk","Step"],["arp","Arpeggio"]],()=>{ t.arpI=-1; rerender(); })),
+      ...(t.mode==="arp"?[
+        full(seg(t,"arpChord","Chord",[["triad","Triad"],["seventh","7th"],["sus","Sus"],["scale","Scale"]],()=>{t.arpI=-1;})),
+        full(seg(t,"arpDir","Direction",[["up","Up"],["down","Down"],["updown","Bounce"],["random","Random"]],()=>{t.arpI=-1;})),
+        full(slider(t,"burst","Notes per hit",1,6,1,v=>v===1?"1 note":v+" notes",()=>{ arpSpeed.hidden=t.burst<=1; })),
+        arpSpeed]
+      :[full(slider(t,"pull","Root pull",0,100,1,v=>v+"%"))]),
+      sect("Range"),
       slider(t,"oct","Octave",1,6,1,v=>"oct "+v),
       slider(t,"span","Range",1,3,1,v=>v+(v>1?" octaves":" octave"),()=>{t.notes=[];}),
-      sect("Burst"),
-      // Speed and Direction show or hide as Notes per hit moves, without rebuilding the page mid-drag
-      full(slider(t,"burst","Notes per hit",1,6,1,v=>v===1?"Off":v+" notes",()=>{ [burstSpeed,burstDir].forEach(el=>el.hidden=t.burst<=1); })),
-      burstSpeed, burstDir);
+      sect("Repeat"),
+      full(seg(repeat,"v","Repeat",[["new","Always new"],["repeat","Repeat a melody"]],()=>{ blendHold(t,"lock"); nmWrap.hidden=!t.lock; },true)),
+      nmWrap);
   } else if(voicePage==="Sound"){
     const vs=document.createElement("div"); vs.className="ctl full";
     vs.innerHTML=`<select id="voicesel" aria-label="Voice type">${MACRO.map(([i,n])=>`<option value="m:${i}">${n}</option>`).join("")}</select>`;
