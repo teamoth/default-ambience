@@ -206,7 +206,6 @@ class Looper extends AudioWorkletProcessor {
       else if (d.cmd === "load") { const src = d.data; this.len = Math.min(this.max, src.length); this.buf.set(src.subarray(0, this.len)); this.buf.fill(0, this.len); this.pos = 0; this.mode = "idle"; this.report(true); }
       else if (d.cmd === "get") { const copy = this.buf.slice(0, this.len); this.port.postMessage({ type: "data", id: d.id, data: copy }, [copy.buffer]); }
       else if (d.cmd === "run") { this.running = !!d.on; }
-      else if (d.cmd === "dispose") { this.dead = true; this.buf = new Float32Array(1); this.max = 1; this.len = 0; }   // no longer needed
       else if (d.cmd === "set") { for (const k of ["reverse", "speed", "fade", "start", "length"]) if (d[k] != null) this[k] = d[k]; }
     };
   }
@@ -216,7 +215,6 @@ class Looper extends AudioWorkletProcessor {
     this.port.postMessage({ type: "pos", mode: this.mode, len: this.len / sampleRate, pos: this.len ? this.pos / this.len : 0 });
   }
   process(inputs, outputs) {
-    if (this.dead) return false;   // lets the browser free this looper
     const inp = inputs[0] && inputs[0][0], out = outputs[0][0];
     if (!out) return true;
     const n = out.length, buf = this.buf;
